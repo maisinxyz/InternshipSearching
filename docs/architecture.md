@@ -1,3 +1,34 @@
+# Current architecture — expanded implementation
+
+The original Step 1 description below is historical. The current app includes
+initial Steps 2–10 implementations, with provisioning and acceptance unfinished.
+
+- `src/domain/` owns canonical job/workspace schemas, filtering, distance math,
+  application-derived submission indicators, and LaTeX validation.
+- `src/server/auth.ts` verifies the configured Supabase owner. The repository
+  uses that user’s JWT against RLS-protected generic JSON records and revision RPCs.
+- `src/server/connectors.ts`, `ingestion.ts`, and `imports.ts` keep external
+  formats and normalization out of presentation components.
+- `src/server/ai.ts` and `resume.ts` isolate Gemini and resume orchestration.
+- `src/app/api/desk/[...path]/route.ts` exposes authenticated workflows.
+- `src/features/workspace/` contains the five private destinations; reusable
+  job cards/details and synthetic preview data remain under `src/features/jobs/`.
+- `/preview` is public synthetic content. `/` displays setup until configured,
+  then requires owner authentication. No actual resume is stored in the repo.
+
+Application submission dates are authoritative for both filters and card badges;
+legacy `state.applied_at` does not establish submission. Unclassified incoming
+roles use `unknown`, rather than being assigned to software. Existing persisted
+misclassifications are not silently rewritten. New resume rules preserve the
+master’s original font size; historical rule versions remain unchanged.
+
+Current limits: workspace bootstrap still loads all record kinds, server filtering
+scans stored jobs, sync uses partial batches without a scheduled runner, and the
+migration/restore workflows have not been verified against a live project.
+See [deployment.md](deployment.md) and [NEXT-SESSION.md](NEXT-SESSION.md).
+
+---
+
 # Co-op Desk: Step 1
 
 The scope is PRD sections 5–8 and 21, plus the Step 1 checklist in section 31.4. The original PRD remains at the repository root. This is a normal, independently runnable Next.js application.

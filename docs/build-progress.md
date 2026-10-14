@@ -1,4 +1,70 @@
-# Current status — paused by user, 2026-10-13
+# Current status — resumed 2026-10-14
+
+Expanded PRD implementation remains in progress; it is not deployed or accepted.
+
+## Continuation: browsing correctness and provisioning
+
+- Fixed Load more so it appends without triggering the global workspace reload.
+  Responses from obsolete filter requests are ignored, and overlapping job IDs
+  are deduplicated. Other workspace mutations can still refresh the first page.
+- Server filters and cards now derive submission from the same application history
+  helper, ignoring legacy bookmark applied state.
+- Incoming unclassified roles use an explicit unknown discipline instead of software.
+  Existing stored classifications are not migrated automatically.
+- Default resume rules preserve the original master font size, including 11 pt.
+  Historical rule versions are not overwritten.
+- Added deployment instructions and removed the unused, unsafe static refresh-token
+  scheduler configuration suggestion. Scheduling is still unimplemented.
+- Formatted touched implementation files; added `npm run test:browsing`.
+- Vercel CLI sign-in completed. The user created the Free Supabase project
+  `co-op-desk` (`roeacpspffrjdanhfghr`, us-east-2); dashboard reported Healthy.
+  Automatic table exposure was disabled before creation.
+- Stopped the stalled local Next.js processes. Added explicit dynamic rendering
+  to root and section pages to prevent a pre-configuration build from retaining
+  the setup screen after environment configuration.
+
+### Checks
+
+- `npm run typecheck`: passed.
+- `npm run build`: passed after final source changes.
+- `npm run test:browsing`: passed (unknown classification/software exclusion,
+  application-based applied filters, unrelated/unsubmitted application isolation,
+  original font-size rule).
+- `git diff --check`: passed before final documentation edits.
+- Safari `/preview`: verified eight fixture roles, firmware preset reducing to four,
+  detail sheet source facts, and Escape dismissal. Private authenticated pagination
+  and phone layout have not been verified in this continuation.
+- Updated production build passed with `/` and `/[section]` rendered dynamically.
+- Fresh production server: root returned 307 to login, preview returned 200, and
+  signed-out workspace API returned 401; all within 0.2 seconds.
+- Development server restarted in 357 ms; login loaded in 216 ms.
+- Owner sign-in verified in Safari at localhost:3000. Authenticated workspace,
+  visit, starter-search writes and job queries completed successfully.
+- Created four Canadian starter searches through Settings and selected the
+  firmware search. After a server restart (366 ms startup) and browser reload,
+  the session remained valid and all four searches were still present.
+
+### Still required
+
+The migration was applied successfully through SQL Editor on 2026-10-14.
+Owner Auth account is created and allowlisted; public signup is disabled.
+Ignored local environment is configured with the public API key and owner UUID.
+Database role checks passed for owner read/write, non-owner read/write isolation
+and anonymous permission denial. The initial role-test writes were rolled back.
+The workspace now contains four starter searches and visit state, with zero jobs
+and one owner. Storage bucket is private. Local owner sign-in and saved-search
+persistence are verified. No deployment, Gemini configuration or actual resume
+import is claimed.
+Earlier startup timeouts cleared after stopping the stalled processes and restarting.
+The updated production build, signed-out routes, authenticated workspace and
+saved-search persistence are verified. Job imports, live connectors, bookmarks,
+applications, resume generation and restoration still need acceptance checks.
+Production configuration/deployment still needs completion. Remaining
+implementation gaps are tracked in NEXT-SESSION.
+
+---
+
+# Historical status — paused by user, 2026-10-13
 
 Scope expanded beyond Step 1. Steps 2–10 now have initial code, but integrations and deployment are **not complete**. Latest TypeScript check passed after the expanded implementation. No new production build or integration verification has been completed. Resume at [NEXT-SESSION.md](NEXT-SESSION.md), which records setup blockers and known implementation gaps.
 

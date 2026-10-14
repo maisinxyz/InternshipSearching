@@ -15,7 +15,21 @@ export const sourceDateSchema = z.discriminatedUnion('precision', [
   z.object({ precision: z.literal('instant'), value: instant }),
 ]);
 
-export const disciplineSchema = z.enum(['software', 'firmware', 'electrical', 'embedded', 'electronics', 'robotics', 'controls', 'hardware', 'mechatronics', 'mechanical', 'qa-test', 'manufacturing-automation']);
+export const disciplineSchema = z.enum([
+  'software',
+  'firmware',
+  'electrical',
+  'embedded',
+  'electronics',
+  'robotics',
+  'controls',
+  'hardware',
+  'mechatronics',
+  'mechanical',
+  'qa-test',
+  'manufacturing-automation',
+  'unknown',
+]);
 export const arrangementSchema = z.enum([
   'on-site',
   'hybrid',
@@ -111,7 +125,13 @@ export const jobSchema = z.object({
   requisition_id: z.string(),
   company: companySchema,
   disciplines: z.array(disciplineSchema).min(1),
-  employment_type: z.enum(['internship', 'co-op', 'student', 'new-grad', 'other']),
+  employment_type: z.enum([
+    'internship',
+    'co-op',
+    'student',
+    'new-grad',
+    'other',
+  ]),
   status: z.enum(['open', 'closed', 'unknown']),
   locations: z.array(jobLocationSchema),
   work_arrangement: arrangementSchema,

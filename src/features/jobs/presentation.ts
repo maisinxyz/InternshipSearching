@@ -1,7 +1,16 @@
 import type { Arrangement, Discipline, Job, SourceDate } from '@/domain/job';
 
 export const disciplineLabels: Record<Discipline, string> = {
-  embedded:'Embedded', electronics:'Electronics', robotics:'Robotics', controls:'Controls', hardware:'Hardware', mechatronics:'Mechatronics', mechanical:'Mechanical', 'qa-test':'QA / test', 'manufacturing-automation':'Manufacturing / automation',
+  embedded: 'Embedded',
+  electronics: 'Electronics',
+  robotics: 'Robotics',
+  controls: 'Controls',
+  hardware: 'Hardware',
+  mechatronics: 'Mechatronics',
+  mechanical: 'Mechanical',
+  'qa-test': 'QA / test',
+  'manufacturing-automation': 'Manufacturing / automation',
+  unknown: 'Discipline not classified',
   software: 'Software',
   firmware: 'Firmware',
   electrical: 'Electrical',

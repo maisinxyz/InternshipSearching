@@ -1,3 +1,48 @@
+# Latest continuation — 2026-10-14
+
+See the current section of build-progress.md. Browsing fixes, original font-size
+rules, a deployment guide, and focused regression checks are now implemented.
+Typecheck and production build passed. Vercel CLI is authenticated. The user
+created the Free Supabase project co-op-desk, ref `roeacpspffrjdanhfghr`, region
+us-east-2. The initial migration was applied successfully through SQL Editor in a transaction.
+Owner Auth exists and is allowlisted. Public signup is disabled.
+Ignored .env.local is configured with project URL, public API key and owner UUID.
+Database role tests passed for owner write/read, non-owner read/write isolation
+and anonymous permissions; test writes were rolled back. Private bucket verified.
+No deployment exists.
+
+The runtime is responsive after stopping the stalled processes and restarting.
+Explicit dynamic rendering was added to `/` and `/[section]` so a build made
+before environment configuration cannot retain the setup screen. The updated
+production build passed. A fresh production server on port 3001 returned a
+307 login redirect at `/`, 200 at `/preview`, and 401 at the signed-out workspace
+API; each response completed within 0.2 seconds. Development startup on port
+3000 then completed in 357 ms and `/login` loaded in 216 ms.
+
+Owner sign-in is verified in Safari at `http://localhost:3000/`. Created the four
+Canadian starter searches through Settings and selected the firmware search.
+After restarting the development server and reloading the browser, the owner
+session remained valid and all four searches were still present. Authenticated
+workspace, visit, search-write and job-query workflows completed successfully.
+
+Immediate next step: verify one live connector or a real URL import, followed by
+job bookmarking/application persistence. There are zero private jobs; no live
+source has been configured. Resume import, Gemini, scheduling, restore, full UI
+acceptance and hosting deployment remain outstanding. Local dev runs on port
+3000; the built production server is also running on port 3001.
+Do not recreate the project or rerun the initial migration.
+
+Resolved from the older notes: Load more no longer invokes perform/reload; applied
+filters now use application history; new unclassified roles are unknown; deployment
+instructions exist; default rules no longer force 10 pt. Existing stored rows/rules
+are not rewritten. Other gaps below remain, including bootstrap scaling, scheduler,
+source cursor stability, restore review, resume validation and full UI QA.
+
+The older handoff below is retained for scope and outstanding details. Its claims
+that no Supabase project exists and no production build ran are superseded above.
+
+---
+
 # Resume here — 2026-10-13
 
 ## User direction

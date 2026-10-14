@@ -1,46 +1,472 @@
 import { z } from 'zod';
-import { session,sameOrigin,body,failure,DeskError } from '@/server/auth';
+import { session, sameOrigin, body, failure, DeskError } from '@/server/auth';
 import { Repository } from '@/server/repository';
-import { schemas,type Kind,filtersSchema } from '@/domain/workspace';
+import { schemas, type Kind, filtersSchema } from '@/domain/workspace';
+import { appliedDateFor } from '@/domain/application-state';
 import { matches } from '@/domain/search';
 import { newestFirst } from '@/features/jobs/presentation';
-import { validateConnector,syncConnector } from '@/server/connectors';
+import { validateConnector, syncConnector } from '@/server/connectors';
 import { previewImport } from '@/server/imports';
 import { ingest } from '@/server/ingestion';
 import { jobSchema } from '@/domain/job';
-import { tailor,handoff,resumeInputs } from '@/server/resume';
+import { tailor, handoff, resumeInputs } from '@/server/resume';
 import { validateResume } from '@/domain/resume';
 import { provider } from '@/server/ai';
 import { fixtureJobs } from '@/features/jobs/data/fixtures';
-export const runtime='nodejs';
-export const maxDuration=60;
-type Context={params:Promise<{path:string[]}>};
-const kindOf=(value:string):Kind=>{if(!(value in schemas))throw new DeskError('Unknown record type.',404);return value as Kind;};
-export async function GET(request:Request,context:Context){try{const auth=await session(),repo=new Repository(auth);const {path}=await context.params;
- if(path[0]==='workspace')return Response.json(await repo.all(),{headers:{'Cache-Control':'private, no-store'}});
- if(path[0]==='jobs'){const url=new URL(request.url);const filters=filtersSchema.parse(JSON.parse(url.searchParams.get('filters')||'{}'));const [jobs,states,visit]=await Promise.all([repo.list('job'),repo.list('state'),repo.get('visit','current')]);const results=jobs.map(r=>r.data).filter(j=>matches(j,filters,states.find(s=>s.data.job_id===j.id)?.data,visit?.data.previous||null)).sort(newestFirst);const cursor=url.searchParams.get('cursor');const start=cursor?Math.max(0,results.findIndex(j=>j.id===cursor)+1):0;return Response.json({jobs:results.slice(start,start+40),next:results.length>start+40?results[start+39].id:null,total:results.length});}
- if(path[0]==='export'){const all=await repo.all();if(new URL(request.url).searchParams.get('format')==='csv'){const cell=(x:unknown)=>'"'+String(x??'').replace(/"/g,'""').replace(/^[=+@-]/,"'$&")+'"';const csv=[['Company','Role','Status','Applied','Follow-up','Resume version'],...all.application.map(a=>[a.data.jobSnapshot.company.name,a.data.jobSnapshot.title,a.data.status,a.data.appliedAt,a.data.followUpDate,a.data.resumeId])].map(row=>row.map(cell).join(',')).join('\r\n');return new Response(csv,{headers:{'Content-Type':'text/csv','Content-Disposition':'attachment; filename="applications.csv"'}});}return Response.json({version:1,exportedAt:new Date().toISOString(),records:all},{headers:{'Content-Disposition':'attachment; filename="coop-desk-backup.json"','Cache-Control':'no-store'}});}
- throw new DeskError('Not found.',404);
- }catch(e){return failure(e);}}
-export async function POST(request:Request,context:Context){try{sameOrigin(request);const repo=new Repository(await session());const {path}=await context.params;const input=await body(request);
- if(path[0]==='record'){const kind=kindOf(path[1]);if(['job','sync','visit','draft'].includes(kind))throw new DeskError('Use the dedicated workflow for this record.');const data=kind==='connector'?validateConnector(input.data):schemas[kind].parse(input.data);const id=z.string().max(200).parse(input.id||crypto.randomUUID());const existing=await repo.get(kind,id);
- if(['template','fact','rules','material'].includes(kind)&&existing)throw new DeskError('Save a new version to preserve document history.');
- if(kind==='state'){const state=schemas.state.parse(data);state.applied_at=(await repo.get('state',id))?.data.applied_at||null;return Response.json(await repo.put('state',id,state,input.revision||0));}
- if(kind==='application'){const a=schemas.application.parse(data);const job=await repo.get('job',a.jobId);if(!job)throw new DeskError('Job not found.');a.jobSnapshot=existing?(existing.data as z.infer<typeof schemas.application>).jobSnapshot:job.data;if(a.resumeId&&!await repo.get('draft',a.resumeId))throw new DeskError('Resume version not found.');for(const id of a.documentIds)if(!await repo.get('material',id))throw new DeskError('Document version not found.');if(a.status==='Applied'&&!a.appliedAt)throw new DeskError('Enter the actual submission date before marking Applied.');return Response.json(await repo.put('application',id,a,input.revision||0));}
- if(kind==='search'&&(data as z.infer<typeof schemas.search>).isDefault){for(const s of await repo.list('search'))if(s.id!==id&&s.data.isDefault)await repo.put('search',s.id,{...s.data,isDefault:false},s.revision);}
- return Response.json(await repo.put(kind,id,data,input.revision||0));}
- if(path[0]==='delete'){const kind=kindOf(path[1]);if(!['search','connector','override'].includes(kind))throw new DeskError('Historical records are retained. Save a new version instead.');await repo.remove(kind,z.string().parse(input.id));return Response.json({ok:true});}
- if(path[0]==='visit'){const old=await repo.get('visit','current');const now=new Date().toISOString();if(old&&Date.now()-Date.parse(old.data.started)<30*60*1000)return Response.json(old);return Response.json(await repo.put('visit','current',{previous:old?.data.started||null,started:now,baseline:old?.data.baseline||now},old?.revision||0));}
- if(path[0]==='sync'){if(input.id)return Response.json(await syncConnector(repo,z.string().parse(input.id)));const connectors=await repo.list('connector');const results=[];for(const c of connectors.filter(c=>c.data.state==='connected'&&(!input.staleOnly||!c.data.lastSync||Date.now()-Date.parse(c.data.lastSync)>86400000)).slice(0,3)){try{results.push({id:c.id,...await syncConnector(repo,c.id)});}catch(e){results.push({id:c.id,error:e instanceof DeskError?e.message:'Refresh failed'});}}return Response.json(results);}
- if(path[0]==='import-preview'){if(!await repo.acquire('import',5))throw new DeskError('Wait a few seconds before importing again.',429);return Response.json(await previewImport(input,repo.auth.owner));}
- if(path[0]==='import-save'){const job=jobSchema.parse(input);if(job.owner_id!==repo.auth.owner||job.snapshots.some(s=>s.owner_id!==repo.auth.owner||s.kind!=='import'))throw new DeskError('Invalid import preview.');return Response.json(await ingest(repo,job));}
- if(path[0]==='tailor'){if(!await repo.acquire('ai',30))throw new DeskError('Wait for the current generation to finish.',429);return Response.json(await tailor(repo,z.string().parse(input.jobId)));}
- if(path[0]==='handoff')return Response.json({prompt:await handoff(repo,z.string().parse(input.jobId))});
- if(path[0]==='draft'){const {job,template,facts,rule}=await resumeInputs(repo,z.string().parse(input.jobId));const tex=z.string().max(250000).parse(input.tex);const parent=input.parentId?await repo.get('draft',input.parentId):null;const master=parent?await repo.get('template',parent.data.templateId):template;if(!master)throw new DeskError('Template version not found.');return Response.json(await repo.put('draft',crypto.randomUUID(),{jobId:job.id,jobSnapshot:parent?.data.jobSnapshot||job.data,templateId:master.id,factIds:parent?.data.factIds||facts.map(f=>f.id),rulesId:parent?.data.rulesId||rule.id,tex,origin:input.origin==='restore'?'restore':parent?'edit':'external',parentId:parent?.id||null,summary:'User-reviewed draft version. Check all content against approved facts.',checks:[...validateResume(tex,master.data.tex),'Externally edited content requires fact and spelling review.'],pageCount:input.pageCount?z.number().int().positive().parse(input.pageCount):null,visualReviewed:input.visualReviewed===true}));}
- if(path[0]==='fact-review'){const row=await repo.get('fact',z.string().parse(input.id));if(!row)throw new DeskError('Fact not found.');return Response.json(await repo.put('fact',row.id,{...row.data,approved:input.approved===true},row.revision));}
- if(path[0]==='fact-import'){if(!await repo.acquire('ai',30))throw new DeskError('Please wait before generating again.',429);const template=await repo.get('template',z.string().parse(input.templateId));if(!template)throw new DeskError('Master not found.');const result=await provider.generate('Extract resume facts verbatim. Each fact must be an exact substring of the source. No contact information. These are unapproved suggestions for human review.',{tex:template.data.tex},z.object({facts:z.array(z.object({text:z.string(),tags:z.array(z.string())}))}));if(result.facts.some(f=>!template.data.tex.includes(f.text)))throw new DeskError('Fact import did not preserve exact source wording.',422);return Response.json(result);}
- if(path[0]==='material'){if(!await repo.acquire('ai',30))throw new DeskError('Please wait before generating again.',429);const application=await repo.get('application',z.string().parse(input.applicationId));if(!application)throw new DeskError('Prepare the application first.');const facts=(await repo.list('fact')).filter(f=>f.data.approved);const profile=(await repo.list('profile'))[0]?.data;const question=z.string().max(20000).parse(input.question||'');if(/race|ethnicity|disability|gender|veteran|religion|sexual orientation/i.test(question))throw new DeskError('Answer voluntary demographic questions yourself.');const kind=z.enum(['cover-letter','answer','follow-up']).parse(input.kind);const limit=input.limit?z.number().int().positive().max(20000).parse(input.limit):null;const limitType=z.enum(['characters','words']).parse(input.limitType||'characters');const result=await provider.generate('Draft the requested application material using only approved facts and confirmed profile answers. Do not invent eligibility, authorization, availability or contacts. Return an empty text and missingFacts questions when required facts are unknown. Cite the approved fact IDs used. Follow the exact length limit. Draft only; nothing is sent.',{kind,question,limit,limitType,job:application.data.jobSnapshot.snapshots.at(-1)?.original_text,facts:facts.map(f=>({id:f.id,text:f.data.text})),confirmedProfile:profile?{availability:profile.availability,authorization:profile.authorization,eligibility:profile.eligibility,answerBank:profile.answerBank}:{}},z.object({text:z.string().max(20000),factIds:z.array(z.string()),missingFacts:z.array(z.string())}));if(result.factIds.some(id=>!facts.some(f=>f.id===id)))throw new DeskError('Draft used unapproved facts.',422);if(limit&&(limitType==='words'?result.text.trim().split(/\s+/).length:result.text.length)>limit)throw new DeskError('Draft exceeded the requested limit. Retry with a shorter target.',422);return Response.json(await repo.put('material',crypto.randomUUID(),{applicationId:application.id,kind,question,...result,text:result.missingFacts.length?'':result.text,limit,limitType,parentId:null}));}
- if(path[0]==='seed'){if(process.env.NODE_ENV==='production'||process.env.ALLOW_FIXTURE_SEED!=='true')throw new DeskError('Fixture seeding is disabled.',403);for(const fixture of fixtureJobs){const json=JSON.stringify(fixture).replaceAll('sample-owner',repo.auth.owner);const job=jobSchema.parse(JSON.parse(json));if(!await repo.get('job',job.id))await repo.put('job',job.id,job);}return Response.json({ok:true});}
- if(path[0]==='restore'){const backup=z.object({version:z.literal(1),records:z.record(z.string(),z.array(z.unknown()))}).parse(input);const rows:unknown[]=[];for(const [key,values] of Object.entries(backup.records)){const kind=kindOf(key);for(const v of values){const r=z.object({id:z.string().max(200),created_at:z.iso.datetime({offset:true}),data:z.unknown()}).parse(v);const data=schemas[kind].parse(r.data);rows.push({id:r.id,kind,data,created_at:r.created_at});}}if(rows.length>10000)throw new DeskError('Backup exceeds the restore limit.');await repo.request('rpc/desk_restore',{method:'POST',body:JSON.stringify({p_rows:rows})});return Response.json({restored:rows.length});}
- throw new DeskError('Not found.',404);
- }catch(e){if(e instanceof z.ZodError)return failure(new DeskError(e.issues[0]?.message||'Invalid input.'));return failure(e);}}
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+type Context = { params: Promise<{ path: string[] }> };
+const kindOf = (value: string): Kind => {
+  if (!(value in schemas)) throw new DeskError('Unknown record type.', 404);
+  return value as Kind;
+};
+export async function GET(request: Request, context: Context) {
+  try {
+    const auth = await session(),
+      repo = new Repository(auth);
+    const { path } = await context.params;
+    if (path[0] === 'workspace')
+      return Response.json(await repo.all(), {
+        headers: { 'Cache-Control': 'private, no-store' },
+      });
+    if (path[0] === 'jobs') {
+      const url = new URL(request.url);
+      const filters = filtersSchema.parse(
+        JSON.parse(url.searchParams.get('filters') || '{}'),
+      );
+      const [jobs, states, visit, applications] = await Promise.all([
+        repo.list('job'),
+        repo.list('state'),
+        repo.get('visit', 'current'),
+        repo.list('application'),
+      ]);
+      const results = jobs
+        .map((r) => r.data)
+        .filter((j) =>
+          matches(
+            j,
+            filters,
+            {
+              saved: false,
+              hidden: false,
+              ...states.find((s) => s.data.job_id === j.id)?.data,
+              applied_at: appliedDateFor(j.id, applications),
+            },
+            visit?.data.previous || null,
+          ),
+        )
+        .sort(newestFirst);
+      const cursor = url.searchParams.get('cursor');
+      const start = cursor
+        ? Math.max(0, results.findIndex((j) => j.id === cursor) + 1)
+        : 0;
+      return Response.json({
+        jobs: results.slice(start, start + 40),
+        next: results.length > start + 40 ? results[start + 39].id : null,
+        total: results.length,
+      });
+    }
+    if (path[0] === 'export') {
+      const all = await repo.all();
+      if (new URL(request.url).searchParams.get('format') === 'csv') {
+        const cell = (x: unknown) =>
+          '"' +
+          String(x ?? '')
+            .replace(/"/g, '""')
+            .replace(/^[=+@-]/, "'$&") +
+          '"';
+        const csv = [
+          [
+            'Company',
+            'Role',
+            'Status',
+            'Applied',
+            'Follow-up',
+            'Resume version',
+          ],
+          ...all.application.map((a) => [
+            a.data.jobSnapshot.company.name,
+            a.data.jobSnapshot.title,
+            a.data.status,
+            a.data.appliedAt,
+            a.data.followUpDate,
+            a.data.resumeId,
+          ]),
+        ]
+          .map((row) => row.map(cell).join(','))
+          .join('\r\n');
+        return new Response(csv, {
+          headers: {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': 'attachment; filename="applications.csv"',
+          },
+        });
+      }
+      return Response.json(
+        { version: 1, exportedAt: new Date().toISOString(), records: all },
+        {
+          headers: {
+            'Content-Disposition':
+              'attachment; filename="coop-desk-backup.json"',
+            'Cache-Control': 'no-store',
+          },
+        },
+      );
+    }
+    throw new DeskError('Not found.', 404);
+  } catch (e) {
+    return failure(e);
+  }
+}
+export async function POST(request: Request, context: Context) {
+  try {
+    sameOrigin(request);
+    const repo = new Repository(await session());
+    const { path } = await context.params;
+    const input = await body(request);
+    if (path[0] === 'record') {
+      const kind = kindOf(path[1]);
+      if (['job', 'sync', 'visit', 'draft'].includes(kind))
+        throw new DeskError('Use the dedicated workflow for this record.');
+      const data =
+        kind === 'connector'
+          ? validateConnector(input.data)
+          : schemas[kind].parse(input.data);
+      const id = z
+        .string()
+        .max(200)
+        .parse(input.id || crypto.randomUUID());
+      const existing = await repo.get(kind, id);
+      if (['template', 'fact', 'rules', 'material'].includes(kind) && existing)
+        throw new DeskError('Save a new version to preserve document history.');
+      if (kind === 'state') {
+        const state = schemas.state.parse(data);
+        state.applied_at =
+          (await repo.get('state', id))?.data.applied_at || null;
+        return Response.json(
+          await repo.put('state', id, state, input.revision || 0),
+        );
+      }
+      if (kind === 'application') {
+        const a = schemas.application.parse(data);
+        const job = await repo.get('job', a.jobId);
+        if (!job) throw new DeskError('Job not found.');
+        a.jobSnapshot = existing
+          ? (existing.data as z.infer<typeof schemas.application>).jobSnapshot
+          : job.data;
+        if (a.resumeId && !(await repo.get('draft', a.resumeId)))
+          throw new DeskError('Resume version not found.');
+        for (const id of a.documentIds)
+          if (!(await repo.get('material', id)))
+            throw new DeskError('Document version not found.');
+        if (a.status === 'Applied' && !a.appliedAt)
+          throw new DeskError(
+            'Enter the actual submission date before marking Applied.',
+          );
+        return Response.json(
+          await repo.put('application', id, a, input.revision || 0),
+        );
+      }
+      if (
+        kind === 'search' &&
+        (data as z.infer<typeof schemas.search>).isDefault
+      ) {
+        for (const s of await repo.list('search'))
+          if (s.id !== id && s.data.isDefault)
+            await repo.put(
+              'search',
+              s.id,
+              { ...s.data, isDefault: false },
+              s.revision,
+            );
+      }
+      return Response.json(await repo.put(kind, id, data, input.revision || 0));
+    }
+    if (path[0] === 'delete') {
+      const kind = kindOf(path[1]);
+      if (!['search', 'connector', 'override'].includes(kind))
+        throw new DeskError(
+          'Historical records are retained. Save a new version instead.',
+        );
+      await repo.remove(kind, z.string().parse(input.id));
+      return Response.json({ ok: true });
+    }
+    if (path[0] === 'visit') {
+      const old = await repo.get('visit', 'current');
+      const now = new Date().toISOString();
+      if (old && Date.now() - Date.parse(old.data.started) < 30 * 60 * 1000)
+        return Response.json(old);
+      return Response.json(
+        await repo.put(
+          'visit',
+          'current',
+          {
+            previous: old?.data.started || null,
+            started: now,
+            baseline: old?.data.baseline || now,
+          },
+          old?.revision || 0,
+        ),
+      );
+    }
+    if (path[0] === 'sync') {
+      if (input.id)
+        return Response.json(
+          await syncConnector(repo, z.string().parse(input.id)),
+        );
+      const connectors = await repo.list('connector');
+      const results = [];
+      for (const c of connectors
+        .filter(
+          (c) =>
+            c.data.state === 'connected' &&
+            (!input.staleOnly ||
+              !c.data.lastSync ||
+              Date.now() - Date.parse(c.data.lastSync) > 86400000),
+        )
+        .slice(0, 3)) {
+        try {
+          results.push({ id: c.id, ...(await syncConnector(repo, c.id)) });
+        } catch (e) {
+          results.push({
+            id: c.id,
+            error: e instanceof DeskError ? e.message : 'Refresh failed',
+          });
+        }
+      }
+      return Response.json(results);
+    }
+    if (path[0] === 'import-preview') {
+      if (!(await repo.acquire('import', 5)))
+        throw new DeskError('Wait a few seconds before importing again.', 429);
+      return Response.json(await previewImport(input, repo.auth.owner));
+    }
+    if (path[0] === 'import-save') {
+      const job = jobSchema.parse(input);
+      if (
+        job.owner_id !== repo.auth.owner ||
+        job.snapshots.some(
+          (s) => s.owner_id !== repo.auth.owner || s.kind !== 'import',
+        )
+      )
+        throw new DeskError('Invalid import preview.');
+      return Response.json(await ingest(repo, job));
+    }
+    if (path[0] === 'tailor') {
+      if (!(await repo.acquire('ai', 30)))
+        throw new DeskError('Wait for the current generation to finish.', 429);
+      return Response.json(await tailor(repo, z.string().parse(input.jobId)));
+    }
+    if (path[0] === 'handoff')
+      return Response.json({
+        prompt: await handoff(repo, z.string().parse(input.jobId)),
+      });
+    if (path[0] === 'draft') {
+      const { job, template, facts, rule } = await resumeInputs(
+        repo,
+        z.string().parse(input.jobId),
+      );
+      const tex = z.string().max(250000).parse(input.tex);
+      const parent = input.parentId
+        ? await repo.get('draft', input.parentId)
+        : null;
+      const master = parent
+        ? await repo.get('template', parent.data.templateId)
+        : template;
+      if (!master) throw new DeskError('Template version not found.');
+      return Response.json(
+        await repo.put('draft', crypto.randomUUID(), {
+          jobId: job.id,
+          jobSnapshot: parent?.data.jobSnapshot || job.data,
+          templateId: master.id,
+          factIds: parent?.data.factIds || facts.map((f) => f.id),
+          rulesId: parent?.data.rulesId || rule.id,
+          tex,
+          origin:
+            input.origin === 'restore'
+              ? 'restore'
+              : parent
+                ? 'edit'
+                : 'external',
+          parentId: parent?.id || null,
+          summary:
+            'User-reviewed draft version. Check all content against approved facts.',
+          checks: [
+            ...validateResume(tex, master.data.tex),
+            'Externally edited content requires fact and spelling review.',
+          ],
+          pageCount: input.pageCount
+            ? z.number().int().positive().parse(input.pageCount)
+            : null,
+          visualReviewed: input.visualReviewed === true,
+        }),
+      );
+    }
+    if (path[0] === 'fact-review') {
+      const row = await repo.get('fact', z.string().parse(input.id));
+      if (!row) throw new DeskError('Fact not found.');
+      return Response.json(
+        await repo.put(
+          'fact',
+          row.id,
+          { ...row.data, approved: input.approved === true },
+          row.revision,
+        ),
+      );
+    }
+    if (path[0] === 'fact-import') {
+      if (!(await repo.acquire('ai', 30)))
+        throw new DeskError('Please wait before generating again.', 429);
+      const template = await repo.get(
+        'template',
+        z.string().parse(input.templateId),
+      );
+      if (!template) throw new DeskError('Master not found.');
+      const result = await provider.generate(
+        'Extract resume facts verbatim. Each fact must be an exact substring of the source. No contact information. These are unapproved suggestions for human review.',
+        { tex: template.data.tex },
+        z.object({
+          facts: z.array(
+            z.object({ text: z.string(), tags: z.array(z.string()) }),
+          ),
+        }),
+      );
+      if (result.facts.some((f) => !template.data.tex.includes(f.text)))
+        throw new DeskError(
+          'Fact import did not preserve exact source wording.',
+          422,
+        );
+      return Response.json(result);
+    }
+    if (path[0] === 'material') {
+      if (!(await repo.acquire('ai', 30)))
+        throw new DeskError('Please wait before generating again.', 429);
+      const application = await repo.get(
+        'application',
+        z.string().parse(input.applicationId),
+      );
+      if (!application) throw new DeskError('Prepare the application first.');
+      const facts = (await repo.list('fact')).filter((f) => f.data.approved);
+      const profile = (await repo.list('profile'))[0]?.data;
+      const question = z
+        .string()
+        .max(20000)
+        .parse(input.question || '');
+      if (
+        /race|ethnicity|disability|gender|veteran|religion|sexual orientation/i.test(
+          question,
+        )
+      )
+        throw new DeskError('Answer voluntary demographic questions yourself.');
+      const kind = z
+        .enum(['cover-letter', 'answer', 'follow-up'])
+        .parse(input.kind);
+      const limit = input.limit
+        ? z.number().int().positive().max(20000).parse(input.limit)
+        : null;
+      const limitType = z
+        .enum(['characters', 'words'])
+        .parse(input.limitType || 'characters');
+      const result = await provider.generate(
+        'Draft the requested application material using only approved facts and confirmed profile answers. Do not invent eligibility, authorization, availability or contacts. Return an empty text and missingFacts questions when required facts are unknown. Cite the approved fact IDs used. Follow the exact length limit. Draft only; nothing is sent.',
+        {
+          kind,
+          question,
+          limit,
+          limitType,
+          job: application.data.jobSnapshot.snapshots.at(-1)?.original_text,
+          facts: facts.map((f) => ({ id: f.id, text: f.data.text })),
+          confirmedProfile: profile
+            ? {
+                availability: profile.availability,
+                authorization: profile.authorization,
+                eligibility: profile.eligibility,
+                answerBank: profile.answerBank,
+              }
+            : {},
+        },
+        z.object({
+          text: z.string().max(20000),
+          factIds: z.array(z.string()),
+          missingFacts: z.array(z.string()),
+        }),
+      );
+      if (result.factIds.some((id) => !facts.some((f) => f.id === id)))
+        throw new DeskError('Draft used unapproved facts.', 422);
+      if (
+        limit &&
+        (limitType === 'words'
+          ? result.text.trim().split(/\s+/).length
+          : result.text.length) > limit
+      )
+        throw new DeskError(
+          'Draft exceeded the requested limit. Retry with a shorter target.',
+          422,
+        );
+      return Response.json(
+        await repo.put('material', crypto.randomUUID(), {
+          applicationId: application.id,
+          kind,
+          question,
+          ...result,
+          text: result.missingFacts.length ? '' : result.text,
+          limit,
+          limitType,
+          parentId: null,
+        }),
+      );
+    }
+    if (path[0] === 'seed') {
+      if (
+        process.env.NODE_ENV === 'production' ||
+        process.env.ALLOW_FIXTURE_SEED !== 'true'
+      )
+        throw new DeskError('Fixture seeding is disabled.', 403);
+      for (const fixture of fixtureJobs) {
+        const json = JSON.stringify(fixture).replaceAll(
+          'sample-owner',
+          repo.auth.owner,
+        );
+        const job = jobSchema.parse(JSON.parse(json));
+        if (!(await repo.get('job', job.id)))
+          await repo.put('job', job.id, job);
+      }
+      return Response.json({ ok: true });
+    }
+    if (path[0] === 'restore') {
+      const backup = z
+        .object({
+          version: z.literal(1),
+          records: z.record(z.string(), z.array(z.unknown())),
+        })
+        .parse(input);
+      const rows: unknown[] = [];
+      for (const [key, values] of Object.entries(backup.records)) {
+        const kind = kindOf(key);
+        for (const v of values) {
+          const r = z
+            .object({
+              id: z.string().max(200),
+              created_at: z.iso.datetime({ offset: true }),
+              data: z.unknown(),
+            })
+            .parse(v);
+          const data = schemas[kind].parse(r.data);
+          rows.push({ id: r.id, kind, data, created_at: r.created_at });
+        }
+      }
+      if (rows.length > 10000)
+        throw new DeskError('Backup exceeds the restore limit.');
+      await repo.request('rpc/desk_restore', {
+        method: 'POST',
+        body: JSON.stringify({ p_rows: rows }),
+      });
+      return Response.json({ restored: rows.length });
+    }
+    throw new DeskError('Not found.', 404);
+  } catch (e) {
+    if (e instanceof z.ZodError)
+      return failure(new DeskError(e.issues[0]?.message || 'Invalid input.'));
+    return failure(e);
+  }
+}
