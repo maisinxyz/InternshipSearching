@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write src docs README.md package.json tsconfig.json next.config.ts",
     "format:check": "prettier --check src docs README.md package.json tsconfig.json next.config.ts",
-    "test:browsing": "node tests/browsing.cjs"
+    "test:browsing": "node tests/browsing.cjs",
+    "test:connectors": "node tests/connectors.cjs",
+    "test:account-sources": "node tests/account-sources.cjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

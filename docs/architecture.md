@@ -22,9 +22,26 @@ roles use `unknown`, rather than being assigned to software. Existing persisted
 misclassifications are not silently rewritten. New resume rules preserve the
 master’s original font size; historical rule versions remain unchanged.
 
+Reviewed source presets are separate from adapter parsing in
+`src/server/source-presets.ts`. Their authenticated setup workflow retains existing
+source configuration. Source location classification lives in the domain layer;
+collectors can explicitly select Canadian workplaces and student-role titles.
+GitHub attribution is retained with snapshots and excluded from classification.
+See [job-sources.md](job-sources.md) for configured boards and source limits.
+
+`src/domain/account-sources.ts` describes account-source access and import opt-in
+rules. `src/server/myexperience-import.ts` parses only selected pasted SFU job
+fields; it does not access accounts. Import preview binds provenance to a stored
+connector, and both preview/save recheck opt-in, pause, expiry and disconnect.
+Provider authentication stays in the user's browser, outside the app. Intern
+Insider uses employer URL import because automated subscription access is not
+authorized by the reviewed provider terms. These are import workflows, not
+authenticated database connectors.
+
 Current limits: workspace bootstrap still loads all record kinds, server filtering
-scans stored jobs, sync uses partial batches without a scheduled runner, and the
-migration/restore workflows have not been verified against a live project.
+scans stored jobs, sync uses partial batches without a scheduled runner, and
+restore acceptance remains outstanding. The initial migration and owner RLS were
+verified against the configured Supabase project.
 See [deployment.md](deployment.md) and [NEXT-SESSION.md](NEXT-SESSION.md).
 
 ---

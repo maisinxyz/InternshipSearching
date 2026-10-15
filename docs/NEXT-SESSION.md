@@ -11,6 +11,26 @@ Database role tests passed for owner write/read, non-owner read/write isolation
 and anonymous permissions; test writes were rolled back. Private bucket verified.
 No deployment exists.
 
+Source setup continuation: eight entries are configured. Tenstorrent/Greenhouse
+imported four Canadian student roles; Kepler/Lever one; the MIT-licensed
+Summer2027 GitHub table one. The other five entries are import-only. See
+[job-sources.md](job-sources.md) and current build progress for changes/checks.
+The GitHub pause/resume test is complete and the source is connected again.
+Final checks used Google Chrome at the user's request. All three live sources
+refreshed successfully, and the feed retained six distinct jobs. Kepler's detail
+shows on-site, January 2027 and four months with its real Lever application link.
+Use Chrome for further UI checks; the user is using Safari independently.
+
+Account-source continuation: SFU and Intern Insider now have opt-in source import
+controls and provider sign-in links. The user signed in directly on both sites.
+SFU co-op posting access was verified, but no export/feed was found in inspected
+screens. A selected SFU firmware role and the user-supplied employer posting from
+Intern Insider were saved privately with source provenance. Intern Insider's
+reviewed terms prohibit automated collection without permission, so only employer
+URL import is implemented. Neither source has authenticated database syncing;
+credentials/cookies are not exported to the app. See job-sources.md and the latest
+build-progress section for checks and limits.
+
 The runtime is responsive after stopping the stalled processes and restarting.
 Explicit dynamic rendering was added to `/` and `/[section]` so a build made
 before environment configuration cannot retain the setup screen. The updated
@@ -25,9 +45,10 @@ After restarting the development server and reloading the browser, the owner
 session remained valid and all four searches were still present. Authenticated
 workspace, visit, search-write and job-query workflows completed successfully.
 
-Immediate next step: verify one live connector or a real URL import, followed by
-job bookmarking/application persistence. There are zero private jobs; no live
-source has been configured. Resume import, Gemini, scheduling, restore, full UI
+After completing source verification, the next step is job bookmarking/application
+persistence and broader URL import acceptance. Eight private jobs are now stored
+from three live collectors and two opt-in account-source import workflows.
+Resume import, Gemini, scheduling, restore, full UI
 acceptance and hosting deployment remain outstanding. Local dev runs on port
 3000; the built production server is also running on port 3001.
 Do not recreate the project or rerun the initial migration.

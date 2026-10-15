@@ -6,7 +6,12 @@ import { appliedDateFor } from '@/domain/application-state';
 import { matches } from '@/domain/search';
 import { newestFirst } from '@/features/jobs/presentation';
 import { validateConnector, syncConnector } from '@/server/connectors';
-import { previewImport } from '@/server/imports';
+import { setupSourcePresets } from '@/server/source-presets';
+import {
+  previewImport,
+  importSchema,
+  checkImportSource,
+} from '@/server/imports';
 import { ingest } from '@/server/ingestion';
 import { jobSchema } from '@/domain/job';
 import { tailor, handoff, resumeInputs } from '@/server/resume';
@@ -209,6 +214,14 @@ export async function POST(request: Request, context: Context) {
         ),
       );
     }
+    if (path[0] === 'setup-sources') {
+      if (!(await repo.acquire('setup-sources', 10)))
+        throw new DeskError(
+          'Source setup is already running. Try again shortly.',
+          429,
+        );
+      return Response.json(await setupSourcePresets(repo));
+    }
     if (path[0] === 'sync') {
       if (input.id)
         return Response.json(
@@ -239,7 +252,13 @@ export async function POST(request: Request, context: Context) {
     if (path[0] === 'import-preview') {
       if (!(await repo.acquire('import', 5)))
         throw new DeskError('Wait a few seconds before importing again.', 429);
-      return Response.json(await previewImport(input, repo.auth.owner));
+      const parsed = importSchema.parse(input);
+      const source = parsed.connectorId
+        ? checkImportSource(await repo.get('connector', parsed.connectorId))
+        : undefined;
+      return Response.json(
+        await previewImport(parsed, repo.auth.owner, source),
+      );
     }
     if (path[0] === 'import-save') {
       const job = jobSchema.parse(input);
@@ -250,6 +269,12 @@ export async function POST(request: Request, context: Context) {
         )
       )
         throw new DeskError('Invalid import preview.');
+      for (const source of job.sources) {
+        if (source.connector_instance_id)
+          checkImportSource(
+            await repo.get('connector', source.connector_instance_id),
+          );
+      }
       return Response.json(await ingest(repo, job));
     }
     if (path[0] === 'tailor') {

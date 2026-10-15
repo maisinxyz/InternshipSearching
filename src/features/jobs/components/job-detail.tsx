@@ -291,8 +291,9 @@ export function JobDetail({
         <section className="detail-section original-section">
           <h3>Original wording & sources</h3>
           <p className="section-caption">
-            These are authored sample descriptions. Each highlight links to
-            wording from its sample.
+            {job.snapshots.every((snapshot) => snapshot.kind === 'fixture')
+              ? 'These are authored sample descriptions. Each highlight links to wording from its sample.'
+              : 'Retained source descriptions and listing snapshots. Expand source wording to inspect the evidence for a fact.'}
           </p>
           {job.snapshots.map((snapshot) => (
             <details className="original-description" key={snapshot.id}>
@@ -337,7 +338,7 @@ export function JobDetail({
                     <ExternalLink size={13} />
                   </a>
                 ) : (
-                  <span>Original posting: Not available for this sample</span>
+                  <span>Original posting: Not supplied</span>
                 )}
                 {source.application_url ? (
                   <a
@@ -349,7 +350,7 @@ export function JobDetail({
                     <ExternalLink size={13} />
                   </a>
                 ) : (
-                  <span>Application link: Not available for this sample</span>
+                  <span>Application link: Not supplied. Follow the original posting’s application instructions.</span>
                 )}
               </div>
             ))}

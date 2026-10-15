@@ -1934,3 +1934,6 @@ For a new Codex session, provide:
 Then name the next checkpoint.
 
 Continue from the existing implementation instead of rebuilding completed work.
+
+Next step:
+COnnect job sources

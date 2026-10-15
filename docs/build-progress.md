@@ -2,6 +2,74 @@
 
 Expanded PRD implementation remains in progress; it is not deployed or accepted.
 
+## SFU and Intern Insider account-source work — 2026-10-14
+
+- Added opt-in import controls and official provider sign-in links, with
+  pause/resume, expiry and disconnect retaining imported history.
+- SFU owner sign-in and co-op posting access verified in Chrome. Inspected
+  results and a selected detail; Print and saved-search alerts are present,
+  while no export/feed was found in the inspected screens.
+- Added selected-text SFU parsing with numeric posting identity and source
+  provenance; exact term/location/duration evidence is retained, with unknown
+  publication/start dates. Shared SFU session URLs cannot merge different jobs.
+- Intern Insider's reviewed terms prohibit automated collection/API access
+  without permission. Added a provider sign-in plus public employer URL import
+  flow; no automated subscription connection is claimed.
+- Server checks opt-in, pause/expiry and source deletion at preview and save.
+  Changing import fields invalidates the old preview.
+- Added public Greenhouse per-posting API import because the supplied employer
+  webpage did not reliably expose title/company to generic JSON-LD extraction.
+  Board metadata supplies the employer name; timezone-offset update dates are
+  normalized as update instants, never publication dates.
+- Typecheck, account-source and connector regressions, live employer preview and
+  production build passed. Chrome saved one selected SFU firmware posting and the
+  employer posting supplied by the user with Intern Insider provenance. Tested
+  SFU opt-out blocking new imports and restored it afterward. Both enabled opt-ins
+  survived reload. The final feed contains eight opportunities, including both
+  new imports with their respective source labels. SFU detail verified numeric
+  job ID, location, on-site arrangement, term/duration and original portal link;
+  exact start/publication dates remain unknown.
+
+No passwords or provider sessions are collected by the application. Automatic
+database synchronization remains unavailable for both account sources.
+
+## Job source connectors — 2026-10-14
+
+Configured eight source entries through the authenticated workspace. Tenstorrent
+(Greenhouse), Kepler Communications (Lever), and the MIT-licensed
+`vanshb03/Summer2027-Internships` GitHub list completed live syncs, importing
+4 + 1 + 1 Canadian student roles. SFU MyExperience, Intern Insider, Workday,
+LinkedIn, and Other career sites are explicitly import-only. No unattended
+scheduler is configured. Details and access/reuse evidence: [job-sources.md](job-sources.md).
+
+- Added an idempotent starter-source workflow; existing equivalent sources,
+  custom names and paused settings are retained.
+- Added explicit Canadian-workplace and student-title collection scopes with
+  backward-compatible defaults for existing source records.
+- Fixed GitHub HTML application links and default-branch retrieval; yearless
+  dates remain unknown. Retained MIT attribution with listing snapshots without
+  allowing its wording to classify the role.
+- Fixed pinned DNS lookup for Node's multi-address callback, full province names,
+  separate employer workplaces and Lever's `onsite` arrangement value.
+- Retained title-stated month/year and duration facts with exact evidence; no
+  start day is inferred. Adapter v2 invalidates old ETags once for parser updates.
+- Typecheck, connector regressions and production builds have passed during
+  this checkpoint. Live protected-fetch checks passed for all three public APIs.
+- Safari confirmed six opportunities. GitHub repeat refresh returned unchanged;
+  pausing disabled its refresh and retained all six jobs. Google Chrome then
+  verified resume and successful refreshes of all three collectors, with six
+  distinct opportunities remaining. An immediate repeated refresh correctly hit
+  the source lease; the prior refresh completed successfully.
+- Kepler's real detail and application link were inspected in Chrome: on-site,
+  January 2027 and four months, with no invented start day. Corrected the shared
+  detail caption so live snapshots are no longer described as authored samples;
+  the synthetic preview retains its sample label.
+
+Limits: GitHub imports table summaries rather than full descriptions. There is
+no automatic closure detection; larger multi-batch runs still need continuation
+review. Additional GitHub candidates without established reuse permission were
+not enabled. No subscription or university credentials were stored.
+
 ## Continuation: browsing correctness and provisioning
 
 - Fixed Load more so it appends without triggering the global workspace reload.
@@ -51,8 +119,8 @@ Owner Auth account is created and allowlisted; public signup is disabled.
 Ignored local environment is configured with the public API key and owner UUID.
 Database role checks passed for owner read/write, non-owner read/write isolation
 and anonymous permission denial. The initial role-test writes were rolled back.
-The workspace now contains four starter searches and visit state, with zero jobs
-and one owner. Storage bucket is private. Local owner sign-in and saved-search
+The workspace now contains four starter searches, visit state, eight source jobs,
+eight source entries and one owner. Storage bucket is private. Local owner sign-in and saved-search
 persistence are verified. No deployment, Gemini configuration or actual resume
 import is claimed.
 Earlier startup timeouts cleared after stopping the stalled processes and restarting.

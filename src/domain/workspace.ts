@@ -76,13 +76,17 @@ export const connectorSchema = z.object({
     board: short.optional(),
     region: z.enum(['global', 'eu']).optional(),
     reuseConfirmed: z.boolean().default(false),
+    licenseNotice: z.string().max(5000).default(''),
+    canadaOnly: z.boolean().default(false),
+    studentOnly: z.boolean().default(false),
+    importsEnabled: z.boolean().default(false),
   }),
   expiresAt: z.iso.date().nullable().default(null),
   lastSync: z.iso.datetime().nullable().default(null),
   etag: short.nullable().default(null),
   cursor: z.number().int().nonnegative().default(0),
   error: short.nullable().default(null),
-  adapterVersion: z.literal('1').default('1'),
+  adapterVersion: z.enum(['1', '2']).default('2'),
 });
 export const factSchema = z.object({
   text: text.min(1),

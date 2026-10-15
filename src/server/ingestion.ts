@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { jobSchema, type Job, type Discipline } from '@/domain/job';
+import { sourceLocation } from '@/domain/source-location';
 import { Repository } from './repository';
 export type Listing = {
   identity: string;
@@ -15,6 +16,7 @@ export type Listing = {
   closed?: boolean;
   arrangement?: Job['work_arrangement'];
   remoteCanada?: boolean | null;
+  attribution?: string;
 };
 export const hash = (text: string) =>
   createHash('sha256').update(text).digest('hex');
@@ -41,8 +43,15 @@ export function normalize(
     created_at: now,
     updated_at: now,
   });
+  const originalText =
+    input.title +
+    '\n\n' +
+    input.text +
+    (input.attribution
+      ? '\n\nRepository reuse notice:\n' + input.attribution
+      : '');
   const sourceId = `${id}-source`,
-    snapshotId = `${id}-${hash(input.text).slice(0, 16)}`;
+    snapshotId = `${id}-${hash(originalText).slice(0, 16)}`;
   const rules: [Discipline, RegExp][] = [
     ['software', /software|developer|programming/i],
     ['firmware', /firmware/i],
@@ -74,6 +83,10 @@ export function normalize(
         value: input.updated,
       }
     : null;
+  const durationQuote = input.title.match(/\b(\d{1,2})[ -]+months?\b/i);
+  const termQuote = input.title.match(
+    /\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Winter|Spring|Summer|Fall|Autumn)\s+20\d{2}\b/i,
+  )?.[0];
   const tech = [
     'C++',
     'Python',
@@ -119,19 +132,9 @@ export function normalize(
             : 'other',
     status: input.closed ? 'closed' : 'open',
     locations: input.locations.map((original_text, i) => {
-      const province =
-        original_text.match(
-          /\b(BC|ON|AB|QC|NS|NB|NL|PE|SK|MB|YT|NT|NU)\b/,
-        )?.[1] || null;
       return {
         ...meta(`${id}-location-${i}`),
-        original_text,
-        city: original_text.includes(',')
-          ? original_text.split(',')[0].trim()
-          : null,
-        province,
-        country:
-          province || /\bCanada\b/i.test(original_text) ? 'Canada' : null,
+        ...sourceLocation(original_text),
         coordinates: null,
         precision: 'unknown',
       };
@@ -145,8 +148,13 @@ export function normalize(
     last_seen_at: now,
     content_changed_at: now,
     salary: null,
-    duration: null,
-    term: null,
+    duration:
+      durationQuote && Number(durationQuote[1]) > 0
+        ? { months: Number(durationQuote[1]), original_text: durationQuote[0] }
+        : null,
+    term: termQuote
+      ? { label: termQuote, start_date: null, original_text: termQuote }
+      : null,
     deadline: null,
     involves: [],
     technologies: tech,
@@ -170,8 +178,8 @@ export function normalize(
         ...meta(snapshotId),
         job_source_id: sourceId,
         retrieved_at: now,
-        content_hash: hash(input.text),
-        original_text: input.text,
+        content_hash: hash(originalText),
+        original_text: originalText,
         sections: [
           {
             heading: 'Original posting',
@@ -184,16 +192,36 @@ export function normalize(
         kind,
       },
     ],
-    evidence: tech.map((t, i) => ({
-      ...meta(`${snapshotId}-e-${i}`),
-      field: 'technologies',
-      snapshot_id: snapshotId,
-      quote: input.text.slice(
-        Math.max(0, input.text.toLowerCase().indexOf(t.toLowerCase()) - 25),
-        input.text.toLowerCase().indexOf(t.toLowerCase()) + t.length + 50,
+    evidence: [
+      ...tech.map((t, i) => ({
+        ...meta(`${snapshotId}-e-${i}`),
+        field: 'technologies',
+        snapshot_id: snapshotId,
+        quote: input.text.slice(
+          Math.max(0, input.text.toLowerCase().indexOf(t.toLowerCase()) - 25),
+          input.text.toLowerCase().indexOf(t.toLowerCase()) + t.length + 50,
+        ),
+        method: 'deterministic',
+      })),
+      ...(
+        [
+          { field: 'duration', quote: durationQuote?.[0] },
+          { field: 'term', quote: termQuote },
+        ] as const
+      ).flatMap(({ field, quote }) =>
+        quote
+          ? [
+              {
+                ...meta(`${snapshotId}-${field}`),
+                field,
+                snapshot_id: snapshotId,
+                quote,
+                method: 'deterministic',
+              },
+            ]
+          : [],
       ),
-      method: 'deterministic',
-    })),
+    ],
     conflicts: [],
   });
 }
@@ -236,6 +264,16 @@ export async function ingest(repo: Repository, incoming: Job) {
       existing.id,
       {
         ...old,
+        ...(sameSource
+          ? {
+              disciplines: incoming.disciplines,
+              locations: incoming.locations,
+              work_arrangement: incoming.work_arrangement,
+              status: incoming.status,
+              duration: incoming.duration,
+              term: incoming.term,
+            }
+          : {}),
         last_seen_at: incoming.last_seen_at,
         source_updated_at: incoming.source_updated_at || old.source_updated_at,
       },
@@ -263,9 +301,13 @@ export async function ingest(repo: Repository, incoming: Job) {
       ...(sameSource
         ? {
             title: incoming.title,
+            disciplines: incoming.disciplines,
+            locations: incoming.locations,
             technologies: incoming.technologies,
             work_arrangement: incoming.work_arrangement,
             status: incoming.status,
+            duration: incoming.duration,
+            term: incoming.term,
           }
         : {}),
       sources: [
