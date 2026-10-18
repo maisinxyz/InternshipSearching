@@ -1,3 +1,30 @@
+# Coding-agent guidance — 2026-10-18
+
+- Added project-level Ponytail guidance in a marked root `AGENTS.md` section,
+  adapted from DietrichGebert/ponytail commit
+  `09c434ab73ca43761c5d8b0c5d341926c2fba710`. Preserved the existing Co-op Desk
+  requirements and generated Next.js block; retained the upstream MIT notice.
+- Added [setup, mechanics, use case and limitations](ponytail.md), linked from
+  README. This is the upstream-supported rules-file path; the full plugin,
+  commands, lifecycle hooks and global settings were not installed.
+- Application source, dependencies and PRD checkpoint scope are unchanged.
+
+Checks:
+
+- `node node_modules/typescript/bin/tsc --noEmit`: passed.
+- Prettier check of the changed Markdown guidance/docs (excluding the retained
+  third-party license text): passed. `git diff --check`: passed.
+- `npm run typecheck` and `npm run build` stalled after their npm headers and were
+  interrupted. Direct TypeScript invocation passed; direct
+  `node node_modules/next/dist/bin/next build` also stalled without diagnostics and
+  was interrupted. No successful production build is claimed for this change.
+- Diff review confirmed no application/dependency changes and preserved the
+  generated Next.js instructions. No browsing flow is affected by this
+  instruction/documentation-only change, so no browser acceptance was rerun.
+- Fresh-session instruction loading and model-behavior/savings benchmarks were
+  not verified. Start a fresh Codex thread to check instruction loading; this
+  session's edits do not demonstrate that a fresh host has loaded the new rules.
+
 # Current status — resumed 2026-10-14
 
 Expanded PRD implementation remains in progress; it is not deployed or accepted.

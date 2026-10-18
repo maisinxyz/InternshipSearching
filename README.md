@@ -45,3 +45,7 @@ resume, restore, and full UI acceptance checks remain open; this is not a verifi
 production deployment. Gemini and an actual master resume are not configured yet.
 
 See [architecture](docs/architecture.md), [component provenance](docs/ui-components.md), [build progress](docs/build-progress.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+
+Coding agents use project-level [Ponytail guidance](docs/ponytail.md) in
+`AGENTS.md` to prefer the smallest complete change while retaining the project's
+architecture and verification requirements.
