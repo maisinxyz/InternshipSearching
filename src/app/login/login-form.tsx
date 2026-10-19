@@ -1,0 +1,63 @@
+'use client';
+import { useState } from 'react';
+export default function LoginForm() {
+  const [email, setEmail] = useState(''),
+    [password, setPassword] = useState(''),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  return (
+    <main className="desk-login">
+      <div className="eyebrow">CO-OP DESK · PRIVATE WORKSPACE</div>
+      <h1>Welcome back.</h1>
+      <p>Your next step starts here.</p>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          try {
+            const r = await fetch('/api/auth', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password }),
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error);
+            window.location.href = '/';
+          } catch (e) {
+            setError((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <label className="desk-field">
+          Email
+          <input
+            type="email"
+            autoComplete="username"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </label>
+        <label className="desk-field">
+          Password
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </label>
+        <button className="button button-primary" disabled={busy}>
+          {busy ? 'Signing in…' : 'Sign in'}
+        </button>
+        {error && <p role="alert">{error}</p>}
+      </form>
+      <p>
+        <a href="/setup">First-time setup</a>
+      </p>
+    </main>
+  );
+}

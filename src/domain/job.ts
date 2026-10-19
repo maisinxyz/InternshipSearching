@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { opportunitySchema } from './opportunity';
 
 const id = z.string().min(1);
 const instant = z.iso.datetime({ offset: true });
@@ -28,6 +29,9 @@ export const disciplineSchema = z.enum([
   'mechanical',
   'qa-test',
   'manufacturing-automation',
+  'data-ai',
+  'it-cloud',
+  'technical-product',
   'unknown',
 ]);
 export const arrangementSchema = z.enum([
@@ -73,6 +77,7 @@ export const jobSourceSchema = z.object({
   application_url: z.url().nullable(),
   source_posted_at: sourceDateSchema.nullable(),
   source_updated_at: sourceDateSchema.nullable(),
+  source_republished_at: sourceDateSchema.nullable().optional(),
   posting_date_trustworthy: z.boolean(),
 });
 
@@ -138,6 +143,9 @@ export const jobSchema = z.object({
   remote_open_to_canada: z.boolean().nullable(),
   source_posted_at: sourceDateSchema.nullable(),
   source_updated_at: sourceDateSchema.nullable(),
+  source_republished_at: sourceDateSchema.nullable().optional(),
+  opportunity: opportunitySchema.optional(),
+  baseline: z.boolean().optional(),
   posting_date_trustworthy: z.boolean(),
   first_seen_at: instant,
   last_seen_at: instant,

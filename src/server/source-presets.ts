@@ -15,12 +15,14 @@ export const sourcePresets = [
     id: 'starter-tenstorrent',
     data: connectorSchema.parse({
       name: 'Tenstorrent',
+      intervalMinutes: 5,
       type: 'greenhouse',
       state: 'connected',
       config: {
         board: 'tenstorrentuniversity',
         canadaOnly: true,
         studentOnly: true,
+        technicalOnly: true,
       },
     }),
   },
@@ -30,13 +32,19 @@ export const sourcePresets = [
       name: 'Kepler Communications',
       type: 'lever',
       state: 'connected',
-      config: { board: 'kepler', canadaOnly: true, studentOnly: true },
+      config: {
+        board: 'kepler',
+        canadaOnly: true,
+        studentOnly: true,
+        technicalOnly: true,
+      },
     }),
   },
   {
     id: 'starter-github-summer2027',
     data: connectorSchema.parse({
       name: 'Summer 2027 internships — Canadian listings',
+      intervalMinutes: 60,
       type: 'github',
       state: 'connected',
       config: {
@@ -46,24 +54,28 @@ export const sourcePresets = [
         licenseNotice: githubLicense,
         canadaOnly: true,
         studentOnly: true,
+        technicalOnly: true,
       },
     }),
   },
-  ...(
-    ['myexperience', 'intern-insider', 'workday', 'linkedin', 'manual'] as const
-  ).map((type) => ({
-    id: `starter-${type}`,
+  ...[
+    ['starter-astera', 'Astera Labs', 'greenhouse', 'asteraearlycareer2027', 5],
+    ['starter-moment', 'Moment Energy', 'greenhouse', 'momentenergy', 5],
+    ['starter-waabi', 'Waabi', 'lever', 'waabi', 15],
+    ['starter-1password', '1Password', 'ashby', '1password', 15],
+  ].map(([id, name, type, board, intervalMinutes]) => ({
+    id: String(id),
     data: connectorSchema.parse({
+      name,
       type,
-      name: {
-        myexperience: 'SFU MyExperience',
-        'intern-insider': 'Intern Insider',
-        workday: 'Workday',
-        linkedin: 'LinkedIn',
-        manual: 'Other career sites',
-      }[type],
-      state: 'import-only',
-      config: {},
+      state: 'connected',
+      intervalMinutes,
+      config: {
+        board,
+        studentOnly: true,
+        technicalOnly: true,
+        canadaOnly: false,
+      },
     }),
   })),
 ];
@@ -81,7 +93,7 @@ export async function setupSourcePresets(repo: Repository) {
             ? row.data.config.repository === preset.data.config.repository &&
               (row.data.config.path || 'README.md') ===
                 (preset.data.config.path || 'README.md')
-            : ['greenhouse', 'lever'].includes(preset.data.type)
+            : ['greenhouse', 'lever', 'ashby'].includes(preset.data.type)
               ? row.data.config.board === preset.data.config.board
               : true)),
     );

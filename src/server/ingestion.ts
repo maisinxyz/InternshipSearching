@@ -3,21 +3,9 @@ import { createHash } from 'node:crypto';
 import { jobSchema, type Job, type Discipline } from '@/domain/job';
 import { sourceLocation } from '@/domain/source-location';
 import { Repository } from './repository';
-export type Listing = {
-  identity: string;
-  title: string;
-  company: string;
-  url: string | null;
-  sourceUrl: string | null;
-  text: string;
-  locations: string[];
-  posted: string | null;
-  updated: string | null;
-  closed?: boolean;
-  arrangement?: Job['work_arrangement'];
-  remoteCanada?: boolean | null;
-  attribution?: string;
-};
+import type { Listing } from '@/domain/collection';
+export type { Listing } from '@/domain/collection';
+import { extractOpportunity } from '@/domain/opportunity';
 export const hash = (text: string) =>
   createHash('sha256').update(text).digest('hex');
 export function canonicalUrl(raw: string) {
@@ -27,6 +15,27 @@ export function canonicalUrl(raw: string) {
       u.searchParams.delete(key);
   u.hash = '';
   return u.href;
+}
+export function extractSalary(text: string): Job['salary'] {
+  const match = text.match(
+    /\b(CAD|USD)\s*\$?\s*([\d,]+(?:\.\d+)?)\s*(?:\/\s*(?:hour|hr|year|yr|month|mo))?\s*[-–]\s*(?:CAD|USD)?\s*\$?\s*([\d,]+(?:\.\d+)?)\s*(?:\/|per\s+)(hour|hr|year|yr|month|mo)\b/i,
+  );
+  if (!match) return null;
+  const minimum = Number(match[2].replaceAll(',', '')),
+    maximum = Number(match[3].replaceAll(',', ''));
+  if (maximum < minimum) return null;
+  return {
+    minimum,
+    maximum,
+    currency: match[1].toUpperCase(),
+    interval: /hour|hr/i.test(match[4])
+      ? 'hour'
+      : /year|yr/i.test(match[4])
+        ? 'year'
+        : 'month',
+    original_text: match[0],
+    qualification: null,
+  };
 }
 export function normalize(
   input: Listing,
@@ -65,6 +74,12 @@ export function normalize(
     ['mechatronics', /mechatronic/i],
     ['qa-test', /test|quality assurance/i],
     ['manufacturing-automation', /manufacturing|automation/i],
+    [
+      'data-ai',
+      /data scien|data analy|machine learning|artificial intelligence/i,
+    ],
+    ['it-cloud', /cloud|devops|information technology|network engineer/i],
+    ['technical-product', /product manag|technical product/i],
   ];
   const disciplines = rules
     .filter(([, re]) => re.test(input.title + ' ' + input.text))
@@ -83,6 +98,22 @@ export function normalize(
         value: input.updated,
       }
     : null;
+  const opportunity = extractOpportunity(
+    input.text,
+    input.locations,
+    input.arrangement || 'unknown',
+  );
+  // A repository's mixed office/remote list cannot establish Canadian remote eligibility.
+  if (input.remoteCanada !== undefined) {
+    opportunity.remoteBC.status =
+      input.arrangement === 'remote' && input.remoteCanada === true
+        ? 'supported'
+        : 'not-stated';
+  }
+  const republished = input.republished
+    ? { precision: 'instant' as const, value: input.republished }
+    : null;
+  const salary = extractSalary(input.text);
   const durationQuote = input.title.match(/\b(\d{1,2})[ -]+months?\b/i);
   const termQuote = input.title.match(
     /\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Winter|Spring|Summer|Fall|Autumn)\s+20\d{2}\b/i,
@@ -121,15 +152,17 @@ export function normalize(
       logo: null,
     },
     disciplines: disciplines.length ? disciplines : ['unknown'],
-    employment_type: /co-?op/i.test(input.title)
-      ? 'co-op'
-      : /intern/i.test(input.title)
-        ? 'internship'
-        : /student/i.test(input.title)
-          ? 'student'
-          : /new.?grad/i.test(input.title)
-            ? 'new-grad'
-            : 'other',
+    employment_type:
+      input.employmentType ||
+      (/co[ -]?op/i.test(input.title)
+        ? 'co-op'
+        : /intern/i.test(input.title)
+          ? 'internship'
+          : /student/i.test(input.title)
+            ? 'student'
+            : /new.?grad/i.test(input.title)
+              ? 'new-grad'
+              : 'other'),
     status: input.closed ? 'closed' : 'open',
     locations: input.locations.map((original_text, i) => {
       return {
@@ -140,14 +173,21 @@ export function normalize(
       };
     }),
     work_arrangement: input.arrangement || 'unknown',
-    remote_open_to_canada: input.remoteCanada ?? null,
+    remote_open_to_canada:
+      input.remoteCanada !== undefined
+        ? input.remoteCanada
+        : opportunity.remoteBC.status === 'supported'
+          ? true
+          : null,
+    opportunity,
+    source_republished_at: republished,
     source_posted_at: posted,
     source_updated_at: updated,
     posting_date_trustworthy: !!posted,
     first_seen_at: now,
     last_seen_at: now,
     content_changed_at: now,
-    salary: null,
+    salary,
     duration:
       durationQuote && Number(durationQuote[1]) > 0
         ? { months: Number(durationQuote[1]), original_text: durationQuote[0] }
@@ -170,6 +210,7 @@ export function normalize(
         application_url: input.url,
         source_posted_at: posted,
         source_updated_at: updated,
+        source_republished_at: republished,
         posting_date_trustworthy: !!posted,
       },
     ],
@@ -193,6 +234,17 @@ export function normalize(
       },
     ],
     evidence: [
+      ...(salary
+        ? [
+            {
+              ...meta(`${snapshotId}-salary`),
+              field: 'salary',
+              snapshot_id: snapshotId,
+              quote: salary.original_text,
+              method: 'deterministic',
+            },
+          ]
+        : []),
       ...tech.map((t, i) => ({
         ...meta(`${snapshotId}-e-${i}`),
         field: 'technologies',
@@ -225,8 +277,12 @@ export function normalize(
     conflicts: [],
   });
 }
-export async function ingest(repo: Repository, incoming: Job) {
-  const all = await repo.list('job');
+export async function ingest(
+  repo: Repository,
+  incoming: Job,
+  known?: import('@/domain/workspace').RecordRow<'job'>[],
+) {
+  const all = known || (await repo.list('job'));
   const source = incoming.sources[0];
   const url = source.application_url
     ? canonicalUrl(source.application_url)
@@ -272,8 +328,33 @@ export async function ingest(repo: Repository, incoming: Job) {
               status: incoming.status,
               duration: incoming.duration,
               term: incoming.term,
+              salary: incoming.salary,
+              opportunity: incoming.opportunity,
+              remote_open_to_canada: incoming.remote_open_to_canada,
+              source_republished_at: incoming.source_republished_at,
+              source_posted_at:
+                old.source_posted_at || incoming.source_posted_at,
+              posting_date_trustworthy:
+                old.posting_date_trustworthy ||
+                incoming.posting_date_trustworthy,
+              sources: old.sources.map((s) =>
+                s.id === sameSource.id
+                  ? {
+                      ...source,
+                      id: s.id,
+                      source_posted_at:
+                        s.source_posted_at || source.source_posted_at,
+                    }
+                  : s,
+              ),
             }
           : {}),
+        evidence: [
+          ...old.evidence.filter(
+            (e) => !incoming.evidence.some((n) => n.id === e.id),
+          ),
+          ...incoming.evidence,
+        ],
         last_seen_at: incoming.last_seen_at,
         source_updated_at: incoming.source_updated_at || old.source_updated_at,
       },
@@ -308,6 +389,10 @@ export async function ingest(repo: Repository, incoming: Job) {
             status: incoming.status,
             duration: incoming.duration,
             term: incoming.term,
+            salary: incoming.salary,
+            opportunity: incoming.opportunity,
+            remote_open_to_canada: incoming.remote_open_to_canada,
+            source_republished_at: incoming.source_republished_at,
           }
         : {}),
       sources: [
@@ -317,6 +402,9 @@ export async function ingest(repo: Repository, incoming: Job) {
       snapshots: [...old.snapshots, snapshot],
       evidence: [...old.evidence, ...incoming.evidence],
       conflicts,
+      source_posted_at: old.source_posted_at || incoming.source_posted_at,
+      posting_date_trustworthy:
+        old.posting_date_trustworthy || incoming.posting_date_trustworthy,
       last_seen_at: incoming.last_seen_at,
       content_changed_at: incoming.content_changed_at,
       source_updated_at: incoming.source_updated_at || old.source_updated_at,

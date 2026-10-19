@@ -6,11 +6,13 @@ import { normalize, ingest, canonicalUrl, type Listing } from './ingestion';
 import { Repository } from './repository';
 import { DeskError } from './auth';
 import { sourceLocation } from '@/domain/source-location';
-const adapterVersion = '2';
+import { isAutomatic } from '@/domain/collection';
+const adapterVersion = '3';
 export const capabilities = {
   github: { scheduled: true, descriptions: false, closure: false },
   greenhouse: { scheduled: true, descriptions: true, closure: false },
   lever: { scheduled: true, descriptions: true, closure: false },
+  ashby: { scheduled: true, descriptions: true, closure: false },
   myexperience: { scheduled: false, descriptions: false, closure: false },
   'intern-insider': { scheduled: false, descriptions: false, closure: false },
   workday: { scheduled: false, descriptions: false, closure: false },
@@ -19,7 +21,7 @@ export const capabilities = {
 };
 export function validateConnector(input: unknown) {
   const c = connectorSchema.parse(input);
-  if (['github', 'greenhouse', 'lever'].includes(c.type)) {
+  if (isAutomatic(c.type)) {
     if (c.type === 'github') {
       if (!/^[\w.-]+\/[\w.-]+$/.test(c.config.repository || ''))
         throw new DeskError('Use an owner/repository GitHub name.');
@@ -78,26 +80,6 @@ export function parseGithub(
       continue;
     }
     if (!url) continue;
-    let posted: string | null = null;
-    const match = date.match(/^([A-Z][a-z]{2}) (\d{1,2}), (20\d{2})$/);
-    if (match) {
-      const month = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ].indexOf(match[1]);
-      if (month >= 0)
-        posted = `${match[3]}-${String(month + 1).padStart(2, '0')}-${match[2].padStart(2, '0')}`;
-    }
     listings.push({
       identity: url,
       title: readable(title).replace(/\*\*/g, ''),
@@ -111,7 +93,7 @@ export function parseGithub(
         .split(/<\/?br\s*\/?\s*>|\s\/\s/i)
         .map(readable)
         .filter(Boolean),
-      posted,
+      posted: null, // Repository addition dates are not employer publication dates.
       updated: null,
       arrangement: /remote/i.test(location) ? 'remote' : 'unknown',
       remoteCanada: /remote.*canada/i.test(location) ? true : null,
@@ -129,6 +111,7 @@ const ghJob = z.object({
   absolute_url: z.url(),
   content: z.string().optional(),
   updated_at: z.string().optional(),
+  first_published: z.string().nullable().optional(),
   location: z.object({ name: z.string() }).optional(),
 });
 const leverJob = z.object({
@@ -150,7 +133,56 @@ const leverJob = z.object({
   applyUrl: z.url(),
   workplaceType: z.string().optional(),
 });
-async function collect(c: RecordRow<'connector'>) {
+export function parseAshby(payload: unknown, company: string): Listing[] {
+  const rows = z
+    .object({
+      jobs: z.array(
+        z.object({
+          id: z.string().optional(),
+          title: z.string(),
+          jobUrl: z.url(),
+          applyUrl: z.url(),
+          isListed: z.boolean(),
+          descriptionPlain: z.string(),
+          location: z.string().optional(),
+          secondaryLocations: z
+            .array(z.object({ location: z.string() }))
+            .optional(),
+          publishedAt: z.string().optional(),
+          workplaceType: z.string().optional(),
+          employmentType: z.string().optional(),
+        }),
+      ),
+    })
+    .parse(payload).jobs;
+  return rows
+    .filter((j) => j.isListed)
+    .map((j) => ({
+      identity: j.id || j.jobUrl,
+      title: j.title,
+      company,
+      url: j.applyUrl,
+      sourceUrl: j.jobUrl,
+      text: j.descriptionPlain,
+      locations: [
+        j.location || '',
+        ...(j.secondaryLocations || []).map((l) => l.location),
+      ].filter(Boolean),
+      posted: null,
+      updated: null,
+      republished: j.publishedAt || null,
+      employmentType: j.employmentType === 'Intern' ? 'internship' : undefined,
+      arrangement:
+        j.workplaceType === 'Remote'
+          ? 'remote'
+          : j.workplaceType === 'Hybrid'
+            ? 'hybrid'
+            : j.workplaceType === 'OnSite'
+              ? 'on-site'
+              : 'unknown',
+    }));
+}
+export async function collect(c: RecordRow<'connector'>) {
   const { type, config, etag, cursor } = c.data;
   const headers: Record<string, string> =
     etag && !cursor && c.data.adapterVersion === adapterVersion
@@ -201,7 +233,7 @@ async function collect(c: RecordRow<'connector'>) {
             locations: j.location
               ? [...new Set(j.location.name.split(/;\s*/))]
               : [],
-            posted: null,
+            posted: j.first_published || null,
             updated: j.updated_at || null,
           }) satisfies Listing,
       ),
@@ -253,6 +285,18 @@ async function collect(c: RecordRow<'connector'>) {
       unchanged: false,
     };
   }
+  if (type === 'ashby') {
+    const result = await safeFetch(
+      `https://api.ashbyhq.com/posting-api/job-board/${config.board}?includeCompensation=true`,
+      headers,
+    );
+    if (result.status === 304) return { items: [], etag, unchanged: true };
+    return {
+      items: parseAshby(JSON.parse(result.text), c.data.name),
+      etag: result.etag,
+      unchanged: false,
+    };
+  }
   throw new DeskError('This source supports imports only.');
 }
 export function collectionItems(
@@ -263,132 +307,215 @@ export function collectionItems(
     .filter(
       (item) =>
         (!config.canadaOnly ||
+          item.remoteCanada === true ||
           item.locations.some(
             (location) => sourceLocation(location).country === 'Canada',
           )) &&
+        (!config.technicalOnly ||
+          (!/\bfinance\b|\baccounting\b|\bbusiness development\b|\bmarketing\b|\bhuman resources\b|\brecruit(?:er|ing|ment)\b/i.test(
+            item.title,
+          ) &&
+            /engineer|develop|software|firmware|hardware|electr|robot|control|automat|manufactur|mechanic|test|quality|data|analyst|\bAI\b|\bML\b|\bIT\b|cloud|security|product|technical (?:support|program|product|operations|analyst)|design|research/i.test(
+              item.title,
+            ))) &&
         (!config.studentOnly ||
+          ['internship', 'co-op', 'student'].includes(
+            item.employmentType || '',
+          ) ||
           /\bintern(?:ship)?\b|\bco[ -]?op\b|\bstudent\b/i.test(item.title)),
     )
     .sort((a, b) => a.identity.localeCompare(b.identity));
 }
-export async function syncConnector(repo: Repository, id: string) {
+export async function syncConnector(
+  repo: Repository,
+  id: string,
+  deadline = Date.now() + 35000,
+) {
   let c = await repo.get('connector', id);
-  if (!c) throw new DeskError('Source not found.', 404);
-  if (c.data.state !== 'connected')
-    throw new DeskError('Connect or resume this source before refreshing.');
+  if (!c || c.data.state !== 'connected' || !isAutomatic(c.data.type))
+    throw new DeskError('Enable this employer board before checking it.', 409);
   if (
     c.data.expiresAt &&
     c.data.expiresAt < new Date().toISOString().slice(0, 10)
-  ) {
-    await repo.put(
-      'connector',
-      id,
-      { ...c.data, state: 'paused', error: 'Subscription expired.' },
-      c.revision,
-    );
-    return { paused: true };
-  }
-  if (!(await repo.acquire(`sync:${id}`, 120)))
+  )
+    throw new DeskError('This source has expired.', 409);
+  if (
+    c.data.nextRunAt &&
+    Date.parse(c.data.nextRunAt) > Date.now() &&
+    c.data.failures
+  )
     throw new DeskError(
-      'This source was refreshed recently or is already running. Try again shortly.',
+      'Source is backing off after a failed check. Retry after ' +
+        c.data.nextRunAt,
       429,
     );
-  let run = await repo.put('sync', crypto.randomUUID(), {
-    connectorId: id,
-    status: 'running',
-    processed: 0,
-    cursor: c.data.cursor,
-    error: null,
-  });
+  if (!(await repo.acquire(`sync:${id}`, 120)))
+    throw new DeskError(
+      'This board is already checking or was checked recently.',
+      429,
+    );
+  const signature = JSON.stringify([
+    c.data.type,
+    c.data.config,
+    c.data.intervalMinutes,
+  ]);
+  let run = await repo.get('sync', `active:${id}`);
+  // A saved batch is tied to the exact configuration that fetched it.
+  if (run?.data.batch && run.data.configKey !== signature)
+    run = await repo.put(
+      'sync',
+      run.id,
+      { ...run.data, batch: null, cursor: 0 },
+      run.revision,
+    );
   try {
-    let result;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        result = await collect(c);
-        break;
-      } catch (e) {
-        if (
-          attempt ||
-          (e instanceof DeskError && e.status !== 429 && e.status < 500)
-        )
-          throw e;
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
+    if (!run?.data.batch) {
+      const result = await collect(c);
+      const checkedAt = new Date().toISOString();
+      run = await repo.put(
+        'sync',
+        `active:${id}`,
+        {
+          connectorId: id,
+          status: 'running',
+          processed: 0,
+          cursor: 0,
+          error: null,
+          batch: collectionItems(result.items, c.data.config),
+          batchEtag: result.etag,
+          checkedAt,
+          configKey: signature,
+        },
+        run?.revision || 0,
+      );
     }
-    if (!result) throw new DeskError('Source unavailable.');
-    result.items = collectionItems(result.items, c.data.config);
-    const start = c.data.cursor;
-    const items = result.items.slice(start, start + 30);
-    for (const item of items) {
+    const batch = run.data.batch!;
+    let processed = 0;
+    // Load the identity index once per batch, rather than once per posting.
+    const known = await repo.list('job');
+    while (
+      run.data.cursor < batch.length &&
+      processed < 30 &&
+      Date.now() < deadline
+    ) {
       const current = await repo.get('connector', id);
-      if (!current || current.data.state !== 'connected') {
+      if (
+        !current ||
+        current.data.state !== 'connected' ||
+        JSON.stringify([
+          current.data.type,
+          current.data.config,
+          current.data.intervalMinutes,
+        ]) !== signature
+      ) {
         await repo.put(
           'sync',
           run.id,
-          { ...run.data, status: 'cancelled' },
+          { ...run.data, status: 'cancelled', batch: null },
           run.revision,
         );
         return { cancelled: true };
       }
-      await ingest(repo, normalize(item, repo.auth.owner, id, c.data.name));
+      const incoming = normalize(
+        batch[run.data.cursor],
+        repo.auth.owner,
+        id,
+        c.data.name,
+      );
+      incoming.baseline = !c.data.baselineComplete && !c.data.lastSync;
+      const saved = await ingest(repo, incoming, known);
+      const index = known.findIndex((j) => j.id === saved.id);
+      if (index < 0) known.push(saved);
+      else known[index] = saved;
       run = await repo.put(
         'sync',
         run.id,
         {
           ...run.data,
+          cursor: run.data.cursor + 1,
           processed: run.data.processed + 1,
-          cursor: start + run.data.processed + 1,
         },
         run.revision,
       );
+      processed++;
     }
-    c = (await repo.get('connector', id))!;
-    if (c.data.state !== 'connected') return { cancelled: true };
-    const next =
-      start + items.length < result.items.length ? start + items.length : 0;
+    c = await repo.get('connector', id);
+    if (
+      !c ||
+      c.data.state !== 'connected' ||
+      JSON.stringify([c.data.type, c.data.config, c.data.intervalMinutes]) !==
+        signature
+    )
+      return { cancelled: true };
+    const remaining = run.data.cursor < batch.length;
     await repo.put(
       'connector',
       id,
       {
         ...c.data,
-        lastSync: next ? c.data.lastSync : new Date().toISOString(),
-        cursor: next,
-        etag: next ? null : result.etag,
-        adapterVersion,
+        cursor: remaining ? run.data.cursor : 0,
+        lastSync: remaining ? c.data.lastSync : run.data.checkedAt,
+        etag: remaining ? null : run.data.batchEtag,
+        nextRunAt: new Date(
+          Date.now() + (remaining ? 120000 : c.data.intervalMinutes * 60000),
+        ).toISOString(),
+        baselineComplete: c.data.baselineComplete || !remaining,
+        failures: 0,
         error: null,
+        adapterVersion,
       },
       c.revision,
     );
     await repo.put(
       'sync',
       run.id,
-      { ...run.data, status: 'complete' },
+      {
+        ...run.data,
+        status: remaining ? 'running' : 'complete',
+        batch: remaining ? batch : null,
+      },
       run.revision,
     );
-    return {
-      processed: items.length,
-      remaining: next > 0,
-      unchanged: result.unchanged,
-    };
+    return { processed, remaining };
   } catch (e) {
     const message =
       e instanceof DeskError
-        ? e.message
-        : 'The source response could not be parsed. Existing jobs are preserved.';
-    await repo.put(
-      'sync',
-      run.id,
-      { ...run.data, status: 'failed', error: message },
-      run.revision,
-    );
+        ? e.message.slice(0, 300)
+        : 'Board response could not be processed. Existing jobs are preserved.';
+    if (run)
+      await repo.put(
+        'sync',
+        run.id,
+        { ...run.data, status: 'failed', error: message },
+        run.revision,
+      );
     const latest = await repo.get('connector', id);
-    if (latest)
+    if (
+      latest &&
+      JSON.stringify([
+        latest.data.type,
+        latest.data.config,
+        latest.data.intervalMinutes,
+      ]) === signature
+    ) {
+      const failures = latest.data.failures + 1;
+      const delay = Math.max(
+        e instanceof DeskError ? e.retryAfterMs || 0 : 0,
+        Math.min(3600000, 60000 * 2 ** Math.min(failures, 6)) +
+          Math.floor(Math.random() * 30000),
+      );
       await repo.put(
         'connector',
         id,
-        { ...latest.data, error: message, cursor: run.data.cursor },
+        {
+          ...latest.data,
+          failures,
+          error: message,
+          nextRunAt: new Date(Date.now() + delay).toISOString(),
+        },
         latest.revision,
       );
+    }
     throw new DeskError(message, 502);
   }
 }

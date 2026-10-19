@@ -12,7 +12,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { JobCard } from '@/features/jobs/components/job-card';
 import { JobDetail } from '@/features/jobs/components/job-detail';
 import { api, useDesk, save, Field, Panel, Empty } from './client';
-import { ImportJob } from './sources';
+import { ImportJob, FeedStatus } from './sources';
 const split = (value: string) =>
   value
     .split(',')
@@ -23,7 +23,7 @@ export function JobsFeed() {
   const [filters, setFilters] = useState<Filters>(
       () =>
         data.search.find((s) => s.data.isDefault)?.data.filters ||
-        filtersSchema.parse({ countries: ['Canada'] }),
+        filtersSchema.parse({ view: 'vancouver' }),
     ),
     [advanced, setAdvanced] = useState(false),
     [searchId, setSearchId] = useState(''),
@@ -37,6 +37,7 @@ export function JobsFeed() {
     [selected, setSelected] = useState<Job | null>(null),
     [open, setOpen] = useState(false),
     [importing, setImporting] = useState(false);
+  const [updates, setUpdates] = useState(false);
   const focus = useRef<HTMLButtonElement | null>(null);
   const current = useRef(0);
   function patch(value: Partial<Filters>) {
@@ -68,6 +69,19 @@ export function JobsFeed() {
       current.current++;
     };
   }, [filters, data]);
+  useEffect(() => {
+    const known = new Set(jobs.map((j) => j.id));
+    const timer = setInterval(() => {
+      api<{ jobs: Job[] }>(
+        'jobs?filters=' + encodeURIComponent(JSON.stringify(filters)),
+      )
+        .then((r) => {
+          if (r.jobs.some((j) => !known.has(j.id))) setUpdates(true);
+        })
+        .catch(() => {});
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [filters, jobs]);
   const stateFor = (job: Job): UserJobState => {
     const row = data.state.find((s) => s.data.job_id === job.id);
     return {
@@ -99,8 +113,8 @@ export function JobsFeed() {
       <div className="page-heading">
         <div>
           <div className="eyebrow">MAKE YOUR NEXT MOVE</div>
-          <h1>All opportunities</h1>
-          <p>Your next co-op starts with a little exploring.</p>
+          <h1>Your next opportunity</h1>
+          <p>Engineering and tech roles, direct from public employer boards.</p>
         </div>
         <div className="desk-actions">
           <button
@@ -125,6 +139,71 @@ export function JobsFeed() {
           </button>
         </div>
       </div>
+      <FeedStatus />
+      <div className="feed-views" aria-label="Opportunity location views">
+        {(
+          [
+            ['vancouver', 'Metro Vancouver'],
+            ['remote', 'Remote from BC'],
+            ['relocation', 'Relocation support'],
+            ['review', 'Relocation · needs review'],
+            ['all', 'All collected jobs'],
+          ] as const
+        ).map(([view, label]) => (
+          <button
+            key={view}
+            className={`button ${filters.view === view ? 'button-primary' : ''}`}
+            aria-pressed={filters.view === view}
+            onClick={() => {
+              setSearchId('');
+              setFilters(filtersSchema.parse({ view }));
+              setUpdates(false);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {filters.view === 'relocation' && (
+        <p className="desk-muted">
+          Stated or conditional moving, housing or visa support. Compare costs
+          in job details and confirm work authorization before deciding.
+        </p>
+      )}
+      {filters.view === 'review' && (
+        <p className="desk-muted">
+          Other Canadian and U.S. roles whose support is not established. These
+          have not been judged worth relocating for.
+        </p>
+      )}
+      <label className="feed-freshness">
+        Freshness{' '}
+        <select
+          value={filters.freshness}
+          onChange={(e) =>
+            patch({ freshness: e.target.value as Filters['freshness'] })
+          }
+        >
+          <option value="any">All dates</option>
+          <option value="posted-day">
+            Employer posted in the last 24 hours
+          </option>
+          <option value="discovered-day">
+            Discovered in the last 24 hours · excludes baseline
+          </option>
+        </select>
+      </label>
+      {updates && (
+        <button
+          className="button"
+          onClick={() => {
+            setUpdates(false);
+            patch({});
+          }}
+        >
+          New opportunities available · update feed
+        </button>
+      )}
       {importing && <ImportJob onDone={() => setImporting(false)} />}
       <div className="desk-searchbar">
         <label className="search-field">
@@ -527,7 +606,9 @@ export function JobsFeed() {
               key={job.id}
               job={job}
               state={stateFor(job)}
-              newSince={!!watermark && job.first_seen_at > watermark}
+              newSince={
+                !job.baseline && !!watermark && job.first_seen_at > watermark
+              }
               onSave={() => changeState(job, { saved: !stateFor(job).saved })}
               onOpen={(trigger) => {
                 focus.current = trigger;

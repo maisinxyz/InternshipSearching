@@ -1,6 +1,16 @@
+## Temporary local access
+
+The current ignored `.env.local` enables `LOCAL_OPEN_ACCESS=true`. Open either
+loopback server without signing in. This uses a shared, persistent SQLite file
+under ignored `.local/`, separate from the existing Supabase workspace. Node 22
+with built-in SQLite is required. Everyone using this local mode shares records.
+Set the flag to false and restart both servers to restore owner login. Keep it
+false on hosted deployments; Vercel also explicitly disables the local bypass.
+Hosted backup restoration remains a private-database operation.
+
 # Private workspace setup
 
-This checkpoint builds locally, but is not production-ready. Scheduled collection,
+This checkpoint builds locally, but is not production-ready. Activation of scheduled collection,
 restore safety, resume validation, and full integration acceptance remain open in
 [NEXT-SESSION.md](NEXT-SESSION.md). Do not treat a successful build as acceptance.
 
@@ -60,14 +70,48 @@ is not available in this checkout. Existing saved rules are versioned and are
 not rewritten when application defaults change; review any rule that says 10 pt.
 Compile generated documents separately before asserting a one-page result.
 
-## Scheduling is not configured
+## Activate the direct employer feed later
 
-There is no `/api/sync` scheduled route or cron configuration yet. Manual refresh
-processes bounded batches and is not an unattended runner. Do not configure
-`SUPABASE_SYNC_REFRESH_TOKEN`: storing a rotating owner refresh token in static
-hosting configuration is not a durable scheduling credential strategy. Resolve
-owner-scoped machine authentication, continuation, deadlines, and crash recovery
-before enabling unattended collection. Never expose a privileged key to clients.
+The user requested local completion on 2026-10-18. No deployment, privileged
+credential setup, SQL migration or cron activation was performed for this change.
+Manual authenticated collection works without a service-role key.
+
+1. Apply `supabase/migrations/202610180001_scheduled_collection.sql` after the
+   original migration. It adds service-role-only worker RPCs for an allowlisted
+   owner and the job/connector/sync record kinds. Test anon and authenticated denial
+   of these RPCs and rejection of a non-allowlisted owner before enabling cron.
+2. Set server-only `SUPABASE_SERVICE_ROLE_KEY` and a random `CRON_SECRET` of at
+   least 32 characters alongside the existing environment. The service role is
+   privileged; keep it in server secret storage. The app pins the worker owner to
+   `OWNER_ID`, never a request parameter. Do not use an owner refresh token.
+3. Deploy and check that unauthenticated `/api/sync` requests return 401. Authorized
+   POST runs due boards; authorized GET returns 200 only for a recent completed
+   heartbeat without reported board errors, otherwise 503. Configure an independent
+   uptime monitor for GET with the bearer header if unattended failure detection
+   is needed. No outbound notification destination is configured by this app.
+4. In Supabase Vault create `desk_sync_url` with the deployed HTTPS `/api/sync` URL
+   and `desk_cron_secret` with the matching secret. Run
+   `supabase/schedule-direct-feed.sql` to dispatch every minute. Existing leases
+   prevent overlapping work; due times, batches and retries persist in the database.
+5. Sign in, open Feed coverage, and choose **Set up employer watchlist**. Existing
+   configurations and pause settings are retained. Review the collection scope of
+   older boards: new presets enable broad technical/student titles, but setup does
+   not overwrite older custom settings. Use **Check now** to verify each source.
+6. Observe overnight/weekend operation for seven days. Verify last complete board
+   checks, source failures, batch completion, retry recovery and heartbeat age.
+   Five-/fifteen-minute intervals are targets, not proven publication latency.
+
+The SQL migration is additive. To disable the schedule, run
+`select cron.unschedule('desk-direct-feed');`; jobs and applications are retained.
+To retire worker access, remove the server secrets and revoke worker RPC grants.
+Do not remove database tables or rerun the initial migration.
+
+Current limits: authoritative automatic closure is not implemented; failures never
+close jobs. Only explicitly recognized pay/support wording is normalized. Remote
+BC eligibility is conservative and still needs employer confirmation. Workday and
+custom career pages remain manual imports. Complete market coverage, instant
+publication detection and automatic affordability/visa determinations are not
+claimed. Relocation scenario inputs are local UI state and reset between jobs.
 
 ## Required launch checks
 

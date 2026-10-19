@@ -1,3 +1,29 @@
+# Local collection verified — 2026-10-18
+
+Seven sources are now configured and collected in the shared local SQLite
+workspace: 1Password (2), Astera Labs (63), the licensed GitHub list (14), Kepler
+(2), Moment Energy (7), Tenstorrent (4), and Waabi (2). All batches completed.
+Of 94 retained source records, three nontechnical roles are reversibly hidden;
+91 remain visible in All collected jobs, with 13 Metro Vancouver matches.
+These local records are separate from the earlier private Supabase workspace.
+Scheduled unattended collection remains inactive.
+
+# Direct employer feed update — 2026-10-18
+
+The app now supports public Greenhouse, Lever, Ashby and GitHub collection with
+stable saved batches and an optional scheduled runner. Feed coverage replaces
+account connections. New watchlist presets add Astera Labs, Moment Energy, Waabi
+and 1Password to the existing three collectors. Live public endpoint checks passed
+for all seven; presets have not been written into the private workspace during
+this implementation turn. Sign in and choose **Set up employer watchlist** to add
+them without replacing existing settings.
+
+Deployment is deferred by the user. The scheduler is implemented but inactive;
+see [deployment.md](deployment.md) for the additive migration and cron activation.
+Targets are five minutes for priority boards, fifteen minutes for other employer
+boards and sixty minutes for the supplementary GitHub list. Preserve the existing
+license notice below. Earlier account-source imports remain historical records.
+
 # Job source configuration
 
 Reviewed and configured on 2026-10-14. Collection is manual or stale-on-open;

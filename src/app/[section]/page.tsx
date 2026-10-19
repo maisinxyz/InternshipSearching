@@ -1,4 +1,5 @@
 import { redirect, notFound } from 'next/navigation';
+import { localOpenAccess } from '@/server/local-access';
 import { configured, session } from '@/server/auth';
 import { Desk } from '@/features/workspace/desk';
 import { Setup } from '@/features/workspace/setup';
@@ -20,5 +21,5 @@ export default async function Section({
   } catch {
     redirect('/login');
   }
-  return <Desk section={section} />;
+  return <Desk section={section} localOpen={localOpenAccess()} />;
 }

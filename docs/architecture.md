@@ -1,3 +1,32 @@
+# Temporary local open workspace — 2026-10-18
+
+`LOCAL_OPEN_ACCESS=true` selects a shared local session and a SQLite-backed
+repository in `.local/workspace.sqlite`. Both loopback servers share persisted
+records, revision checks and leases. This does not use a privileged key or change
+Supabase RLS; the original private workspace is separate. Vercel disables this
+opt-in. Root/section pages and APIs use the same session switch; the login route
+redirects to Jobs and the shell labels open local access. Disable the environment
+flag to return to owner authentication. No deployment access change was made.
+
+# Direct employer feed checkpoint — 2026-10-18
+
+- `src/domain/collection.ts` owns validated listing contracts and source freshness;
+  `opportunity.ts` owns evidence-based support extraction, geographic views and
+  relocation arithmetic. The job schema keeps optional backward-compatible
+  evidence, baseline and republication fields separate from original publication.
+- `connectors.ts` collects Greenhouse, Lever, Ashby and GitHub. Each source saves
+  a stable batch under its `sync` record before ingesting bounded chunks. Config
+  changes invalidate that batch; failures retain progress and persist retry times.
+- `scheduler.ts` and `/api/sync` provide owner-pinned scheduled work, bearer-secret
+  validation, a persisted heartbeat and an authenticated monitor endpoint. Worker
+  writes use service-role-only RPCs; normal browsing retains owner JWT/RLS access.
+- Feed coverage replaces subscription/university setup. Old records and import
+  compatibility remain. Jobs has explicit geographic/support and freshness views;
+  periodic discovery notices do not reorder the current feed automatically.
+- Deployment is deferred at the user's request. Apply the additive worker migration
+  and activate Supabase Cron later using `docs/deployment.md`. No runtime cadence
+  or deployed authorization verification is claimed by local tests.
+
 # Current architecture — expanded implementation
 
 The original Step 1 description below is historical. The current app includes
@@ -39,7 +68,7 @@ authorized by the reviewed provider terms. These are import workflows, not
 authenticated database connectors.
 
 Current limits: workspace bootstrap still loads all record kinds, server filtering
-scans stored jobs, sync uses partial batches without a scheduled runner, and
+scans stored jobs, the new scheduled runner is not deployed, and
 restore acceptance remains outstanding. The initial migration and owner RLS were
 verified against the configured Supabase project.
 See [deployment.md](deployment.md) and [NEXT-SESSION.md](NEXT-SESSION.md).

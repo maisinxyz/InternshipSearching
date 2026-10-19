@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { arrangementSchema, disciplineSchema, jobSchema } from './job';
+import { listingSchema } from './collection';
 const text = z.string().max(20000);
 const short = z.string().max(300);
 export const filtersSchema = z.object({
+  view: z
+    .enum(['all', 'vancouver', 'remote', 'relocation', 'review'])
+    .default('all'),
+  freshness: z.enum(['any', 'posted-day', 'discovered-day']).default('any'),
   countries: z.array(short).default([]),
   provinces: z.array(short).default([]),
   cities: z.array(short).default([]),
@@ -53,6 +58,7 @@ export const connectorSchema = z.object({
     'github',
     'greenhouse',
     'lever',
+    'ashby',
     'myexperience',
     'intern-insider',
     'workday',
@@ -79,14 +85,21 @@ export const connectorSchema = z.object({
     licenseNotice: z.string().max(5000).default(''),
     canadaOnly: z.boolean().default(false),
     studentOnly: z.boolean().default(false),
+    technicalOnly: z.boolean().default(false),
     importsEnabled: z.boolean().default(false),
   }),
   expiresAt: z.iso.date().nullable().default(null),
+  intervalMinutes: z
+    .union([z.literal(5), z.literal(15), z.literal(30), z.literal(60)])
+    .default(15),
+  nextRunAt: z.iso.datetime().nullable().default(null),
+  failures: z.number().int().nonnegative().default(0),
+  baselineComplete: z.boolean().default(false),
   lastSync: z.iso.datetime().nullable().default(null),
   etag: short.nullable().default(null),
   cursor: z.number().int().nonnegative().default(0),
   error: short.nullable().default(null),
-  adapterVersion: z.enum(['1', '2']).default('2'),
+  adapterVersion: z.enum(['1', '2', '3']).default('3'),
 });
 export const factSchema = z.object({
   text: text.min(1),
@@ -203,6 +216,10 @@ export const schemas = {
     processed: z.number(),
     cursor: z.number(),
     error: short.nullable(),
+    batch: z.array(listingSchema).nullable().default(null),
+    batchEtag: short.nullable().default(null),
+    checkedAt: z.iso.datetime().nullable().default(null),
+    configKey: z.string().default(''),
   }),
   override: z.object({
     jobId: short,

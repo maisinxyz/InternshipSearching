@@ -1,3 +1,122 @@
+# Live local feed populated — 2026-10-18 (Vancouver time)
+
+- Added all seven employer/community presets to the shared local workspace and
+  completed their initial collection, including all three Astera batches.
+- Stored 94 real source records. Default views expose 91 tech/engineering roles:
+  13 Metro Vancouver, 1 explicitly Canada-remote, 46 relocation-support and 27
+  relocation-needs-review matches (views can overlap for multi-location roles).
+- Three newly collected finance/business-development/marketing roles were hidden
+  using reversible state records; original jobs and descriptions were retained.
+  Tightened the technical-title collection rule so those titles do not re-enter.
+- Corrected a GitHub multi-location role's unsupported remote-Canada inference.
+  Mixed Canadian offices plus unspecified remote work now remains unknown.
+- All seven sources report completed checks, no pending cursor and no errors.
+  Jobs use source snapshots, not fixtures. Data is shared by ports 3000 and 3001.
+- Checks: connector and direct-feed behavioral regressions passed, production
+  build/typecheck passed, persisted-store counts asserted, Vancouver jobs endpoint
+  returned 200 on both servers. Restarted the production server with the fixes.
+- Limits: did not repeat visual/phone/keyboard review; user approved appearance.
+  Community rows can lack full descriptions and publication dates. No continuous
+  scheduler was activated; existing page-open/manual refresh remains available.
+  Newly imported inventory is a baseline, not a claim of publication today.
+
+# Temporary local access without sign-in — 2026-10-18
+
+- User requested removing login for now. Enabled `LOCAL_OPEN_ACCESS=true` in the
+  ignored local environment. Both local servers open Jobs and all workspace
+  sections without a cookie; `/login` redirects to `/` and sign-out is hidden.
+- Local mode uses a separate shared SQLite workspace under ignored `.local/`.
+  Changes survive reloads and process restarts, and both servers share leases and
+  revision checks. No Supabase permissions or existing remote records changed.
+  Returning the flag to false restores the existing owner-login workflow.
+- Explicit local opt-in is disabled on Vercel. Same-origin mutation checks and
+  scheduler bearer authentication remain in place. Anyone who can access this
+  local mode shares the same local workspace, as requested.
+- Checks: direct TypeScript check and production build passed; local storage and
+  auth tests passed; direct-feed regressions passed. Live HTTP checks on 3000 and
+  3001 verified root/coverage/workspace/jobs access without credentials, login
+  redirects, hidden sign-out and rejection of mutation requests without an origin.
+- Limits: visual/phone/keyboard review not rerun due prior native automation
+  stalls. This local store is separate from the existing Supabase data; hosted
+  backup restore still requires private mode. Local mode requires Node 22 with
+  built-in SQLite. Deployment and unattended collection remain deferred.
+
+# Direct employer feed implemented locally — 2026-10-18
+
+User approved implementation, then explicitly chose **finish locally; deploy
+later**. No deployment, database migration, secrets or schedule were activated.
+
+Delivered:
+
+- Feed coverage replaces subscription/university account setup. The idempotent
+  watchlist includes Tenstorrent, Astera Labs, Moment Energy, Kepler, Waabi,
+  1Password and the existing licensed GitHub list. Prior imported jobs and source
+  configurations remain intact. Pause/edit/remove controls retain user history.
+- Added Ashby public collection and Greenhouse original-publication mapping.
+  Ashby last-publication is retained separately; GitHub addition dates no longer
+  become employer posting dates. Broad tech/student collection scope is explicit.
+- Saved source batches survive changing upstream order and interrupted writes.
+  Source leases, bounded runs, persisted retry times, Retry-After handling and
+  baseline-import flags support frequent collection without false new-job badges.
+- Added the bearer-protected scheduled endpoint, owner-pinned worker repository,
+  additive service-role-only RPC migration, heartbeat health endpoint and Vault
+  cron activation script. Manual collection does not require these new credentials.
+- Added Metro Vancouver, BC-remote, relocation-support and needs-review views;
+  separate posted/discovered freshness filters; source freshness status; explicit
+  sponsorship/housing/relocation wording; and a relocation cost comparison.
+  New-job notices let the user refresh without automatically reordering the feed.
+- Updated PRD direction, architecture and deployment handoff. Retained legacy
+  import compatibility and all existing provenance/licensing notices.
+
+Checks completed:
+
+- `node node_modules/typescript/bin/tsc --noEmit`: passed.
+- `npm run build`: passed after final runtime changes (Next.js 16.4.0).
+- `node tests/direct-feed.cjs`: passed, including visibility/republication,
+  geography, benefit denials and mixed clauses, unknown currency, budget math,
+  baseline freshness, unauthorized GET/POST, stable batch continuation,
+  interrupted-write recovery, pause, duplicates, saved-state retention and backoff.
+- Existing connector/browsing and account-source regressions: passed.
+- `node tests/connectors.cjs --live`: all seven public endpoints succeeded;
+  Ashby returned parseable listed jobs. No private jobs were written by these tests.
+- Fresh production server on port 3001: `/api/sync` returned 401 without a secret;
+  `/sources` returned 307 to `/login` for a signed-out request.
+- Touched implementation files formatted with Prettier; `git diff --check` passed.
+
+Limits / checks omitted:
+
+- Chrome automation repeatedly took 11–13 minutes per native action/read and
+  reported an intervening user change. Authenticated desktop, phone and keyboard
+  acceptance could not be completed. No successful visual review is claimed.
+- The additive migration and machine-role authorization tests were not run against
+  hosted Supabase; the user deferred deployment. Actual nightly/weekend collection,
+  external health monitoring and a seven-day freshness pilot remain unverified.
+- No automatic closure detection, custom Workday crawler, universal employer
+  coverage, inferred visa eligibility or automatic city-cost data is implemented.
+  Recognized pay/support extraction is conservative; unknowns need review.
+- Relocation scenarios use user-entered amounts in one currency and reset between
+  jobs. They do not infer taxes, exchange rates, assistance or personal eligibility.
+- shortcut: bootstrap and job filtering still read owner records in memory;
+  move to indexed database queries when measured board volume makes this slow.
+- Five-/fifteen-minute intervals are targets, not publication-latency guarantees.
+  Existing saved searches retain their filters; choose the new geographic view to
+  browse broadly instead of an older discipline-specific default.
+
+# Direct employer feed research — 2026-10-18
+
+- User changed direction from Intern Insider/MyExperience connections to a
+  frequently refreshed public employer feed, focused on Vancouver, eligible
+  fully remote roles and justified Canadian/U.S. relocation opportunities.
+- Added [research and proposed checkpoint](direct-job-feed-research.md), covering
+  employer APIs, GitHub discovery, scheduling, honest freshness, source failures,
+  sponsorship/relocation evidence and affordability/career evaluation.
+- Checked official provider documentation and public employer examples. New API
+  endpoint retrieval was unavailable through the research tool; continuous
+  cadence, coverage and deployment are not verified. User authorization and term
+  preferences remain to be confirmed.
+- Research-only change: app/database/source configuration unchanged. Typecheck,
+  production build and browsing acceptance omitted because no runtime flow changed.
+
 # Coding-agent guidance — 2026-10-18
 
 - Added project-level Ponytail guidance in a marked root `AGENTS.md` section,

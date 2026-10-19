@@ -1,3 +1,12 @@
+# Latest direction — 2026-10-18
+
+The user approved the direct employer feed and explicitly requested **finish
+locally; deploy later**. See `docs/build-progress.md` for checks and
+`docs/deployment.md` for activation. Do not resume SFU/Intern Insider connection
+work. Public collectors, feed coverage, scheduling code and geographic/relocation
+views are implemented locally. The additive SQL migration, server scheduler
+secrets, cron activation, deployment and multi-day pilot remain pending.
+
 # Latest continuation — 2026-10-14
 
 See the current section of build-progress.md. Browsing fixes, original font-size

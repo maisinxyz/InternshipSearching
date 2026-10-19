@@ -6,6 +6,7 @@ import { appliedDateFor } from '@/domain/application-state';
 import { matches } from '@/domain/search';
 import { newestFirst } from '@/features/jobs/presentation';
 import { validateConnector, syncConnector } from '@/server/connectors';
+import { runDueSources, schedulerStatus } from '@/server/scheduler';
 import { setupSourcePresets } from '@/server/source-presets';
 import {
   previewImport,
@@ -30,10 +31,18 @@ export async function GET(request: Request, context: Context) {
     const auth = await session(),
       repo = new Repository(auth);
     const { path } = await context.params;
-    if (path[0] === 'workspace')
-      return Response.json(await repo.all(), {
+    if (path[0] === 'feed-status')
+      return Response.json(await schedulerStatus(repo));
+    if (path[0] === 'workspace') {
+      const data = await repo.all();
+      data.sync = data.sync.map((r) => ({
+        ...r,
+        data: { ...r.data, batch: null },
+      }));
+      return Response.json(data, {
         headers: { 'Cache-Control': 'private, no-store' },
       });
+    }
     if (path[0] === 'jobs') {
       const url = new URL(request.url);
       const filters = filtersSchema.parse(
@@ -142,6 +151,33 @@ export async function POST(request: Request, context: Context) {
         .max(200)
         .parse(input.id || crypto.randomUUID());
       const existing = await repo.get(kind, id);
+      if (kind === 'connector') {
+        const next = validateConnector(input.data);
+        const previous = await repo.get('connector', id);
+        const changed =
+          !previous ||
+          JSON.stringify(previous.data.config) !==
+            JSON.stringify(next.config) ||
+          previous.data.type !== next.type;
+        return Response.json(
+          await repo.put(
+            'connector',
+            id,
+            {
+              ...next,
+              lastSync: previous?.data.lastSync || null,
+              failures: previous?.data.failures || 0,
+              error: previous?.data.error || null,
+              baselineComplete: previous?.data.baselineComplete || false,
+              cursor: changed ? 0 : previous?.data.cursor || 0,
+              etag: changed ? null : previous?.data.etag || null,
+              nextRunAt: changed ? null : previous?.data.nextRunAt || null,
+            },
+            input.revision || 0,
+          ),
+        );
+      }
+
       if (['template', 'fact', 'rules', 'material'].includes(kind) && existing)
         throw new DeskError('Save a new version to preserve document history.');
       if (kind === 'state') {
@@ -227,27 +263,7 @@ export async function POST(request: Request, context: Context) {
         return Response.json(
           await syncConnector(repo, z.string().parse(input.id)),
         );
-      const connectors = await repo.list('connector');
-      const results = [];
-      for (const c of connectors
-        .filter(
-          (c) =>
-            c.data.state === 'connected' &&
-            (!input.staleOnly ||
-              !c.data.lastSync ||
-              Date.now() - Date.parse(c.data.lastSync) > 86400000),
-        )
-        .slice(0, 3)) {
-        try {
-          results.push({ id: c.id, ...(await syncConnector(repo, c.id)) });
-        } catch (e) {
-          results.push({
-            id: c.id,
-            error: e instanceof DeskError ? e.message : 'Refresh failed',
-          });
-        }
-      }
-      return Response.json(results);
+      return Response.json(await runDueSources(repo, !!input.staleOnly));
     }
     if (path[0] === 'import-preview') {
       if (!(await repo.acquire('import', 5)))

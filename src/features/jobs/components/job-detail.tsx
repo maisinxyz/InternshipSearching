@@ -27,6 +27,7 @@ import {
   locationLabel,
   salaryLabel,
 } from '../presentation';
+import { RelocationReview } from './relocation-review';
 import type { ReactNode, RefObject } from 'react';
 
 function Evidence({ job, field }: { job: Job; field: EvidenceField }) {
@@ -47,7 +48,9 @@ function Evidence({ job, field }: { job: Job; field: EvidenceField }) {
         return (
           <div key={item.id}>
             <blockquote>{item.quote}</blockquote>
-            <small>{source?.label} · {item.method}</small>
+            <small>
+              {source?.label} · {item.method}
+            </small>
           </div>
         );
       })}
@@ -112,7 +115,9 @@ export function JobDetail({
           <FileText size={14} />
           Job details
         </span>
-        <span className="sample-pill">{job.snapshots[0].kind === "fixture" ? "Sample job" : job.status}</span>
+        <span className="sample-pill">
+          {job.snapshots[0].kind === 'fixture' ? 'Sample job' : job.status}
+        </span>
       </div>
       <div className="detail-heading">
         <div className="detail-company">
@@ -163,10 +168,12 @@ export function JobDetail({
             {state.saved ? 'Saved' : 'Save job'}
           </button>
         </div>
-        {job.snapshots[0].kind === "fixture" && <p className="sample-note">
-          Demonstration content, not a live vacancy. Employer names and logos
-          identify the sample only.
-        </p>}
+        {job.snapshots[0].kind === 'fixture' && (
+          <p className="sample-note">
+            Demonstration content, not a live vacancy. Employer names and logos
+            identify the sample only.
+          </p>
+        )}
       </div>
       <div className="detail-body">
         <section className="detail-section">
@@ -264,6 +271,7 @@ export function JobDetail({
             </Fact>
           </div>
         </section>
+        {privateMode && <RelocationReview key={job.id} job={job} />}
         {job.conflicts.length > 0 && (
           <aside className="conflict-note">
             <CircleAlert size={18} />
@@ -350,7 +358,10 @@ export function JobDetail({
                     <ExternalLink size={13} />
                   </a>
                 ) : (
-                  <span>Application link: Not supplied. Follow the original posting’s application instructions.</span>
+                  <span>
+                    Application link: Not supplied. Follow the original
+                    posting’s application instructions.
+                  </span>
                 )}
               </div>
             ))}
@@ -367,6 +378,24 @@ export function JobDetail({
           </div>
           <dl className="source-dates">
             <div>
+              <dt>Last confirmed present</dt>
+              <dd>
+                {dateLabel({ precision: 'instant', value: job.last_seen_at })}
+              </dd>
+            </div>
+            {job.source_republished_at && (
+              <div>
+                <dt>Last published / republished</dt>
+                <dd>{dateLabel(job.source_republished_at)}</dd>
+              </div>
+            )}
+            {job.baseline && (
+              <div>
+                <dt>Discovery context</dt>
+                <dd>Existing inventory on the first board check</dd>
+              </div>
+            )}
+            <div>
               <dt>Original posting date</dt>
               <dd>{dateLabel(job.source_posted_at)}</dd>
             </div>
@@ -382,44 +411,65 @@ export function JobDetail({
             </div>
           </dl>
         </section>
-        {privateMode ? <section className="detail-section preparation"><h3>Your next steps</h3><div className="desk-actions"><a className="button" href={"/resume?job="+job.id}>Tailor resume</a><a className="button button-primary" href={"/applications?job="+job.id}>Prepare application</a><button className="button" onClick={onHide}>{state.hidden?"Unhide job":"Hide job"}</button></div><p>Submission is recorded manually in Applications.</p></section> : <section className="detail-section preparation">
-          <h3>Your next steps</h3>
-          <div className="preparation-buttons">
+        {privateMode ? (
+          <section className="detail-section preparation">
+            <h3>Your next steps</h3>
+            <div className="desk-actions">
+              <a className="button" href={'/resume?job=' + job.id}>
+                Tailor resume
+              </a>
+              <a
+                className="button button-primary"
+                href={'/applications?job=' + job.id}
+              >
+                Prepare application
+              </a>
+              <button className="button" onClick={onHide}>
+                {state.hidden ? 'Unhide job' : 'Hide job'}
+              </button>
+            </div>
+            <p>Submission is recorded manually in Applications.</p>
+          </section>
+        ) : (
+          <section className="detail-section preparation">
+            <h3>Your next steps</h3>
+            <div className="preparation-buttons">
+              <button
+                className="button"
+                disabled
+                title="Resume tools are not available in this preview"
+              >
+                <Sparkles size={15} />
+                Tailor resume
+              </button>
+              <button
+                className="button"
+                disabled
+                title="Application preparation is not available in this preview"
+              >
+                <FileText size={15} />
+                Prepare application
+              </button>
+            </div>
+            <p className="section-caption">
+              Resume tools and application preparation will be added later.
+            </p>
             <button
-              className="button"
-              disabled
-              title="Resume tools are not available in this preview"
+              className={`button ${state.applied_at ? 'button-saved' : ''}`}
+              onClick={onApplied}
+              aria-pressed={Boolean(state.applied_at)}
             >
-              <Sparkles size={15} />
-              Tailor resume
+              <Check size={16} />
+              {state.applied_at
+                ? 'Applied · undo sample status'
+                : 'Mark applied in preview'}
             </button>
-            <button
-              className="button"
-              disabled
-              title="Application preparation is not available in this preview"
-            >
-              <FileText size={15} />
-              Prepare application
-            </button>
-          </div>
-          <p className="section-caption">
-            Resume tools and application preparation will be added later.
-          </p>
-          <button
-            className={`button ${state.applied_at ? 'button-saved' : ''}`}
-            onClick={onApplied}
-            aria-pressed={Boolean(state.applied_at)}
-          >
-            <Check size={16} />
-            {state.applied_at
-              ? 'Applied · undo sample status'
-              : 'Mark applied in preview'}
-          </button>
-          <p className="section-caption">
-            Sample status lasts until you reload. Opening a link never changes
-            it.
-          </p>
-        </section>}
+            <p className="section-caption">
+              Sample status lasts until you reload. Opening a link never changes
+              it.
+            </p>
+          </section>
+        )}
       </div>
     </SheetContent>
   );

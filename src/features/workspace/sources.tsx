@@ -1,8 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Job } from '@/domain/job';
 import { connectorSchema, type RecordRow } from '@/domain/workspace';
-import { accountSource, importBlockedReason } from '@/domain/account-sources';
+import { importBlockedReason } from '@/domain/account-sources';
+import { automaticTypes, isAutomatic, sourceHealth } from '@/domain/collection';
 import { useDesk, api, save, Field, Panel, Empty } from './client';
 export function ImportJob({
   onDone,
@@ -29,7 +30,7 @@ export function ImportJob({
       description={
         employerLinkOnly
           ? 'Find a job using your subscription, open its employer posting, and paste that public employer URL here. Co-op Desk retrieves the employer page, not your subscription account.'
-          : 'Import an accessible public posting, or paste one selected job’s description. Review the preview before saving. For SFU, keep the posting URL and paste the description from your signed-in tab.'
+          : 'Import an accessible public posting, or paste one selected job’s description. Review the preview before saving. Keep the original source link with the description.'
       }
     >
       <div className="desk-form-grid">
@@ -187,32 +188,92 @@ export function ImportJob({
     </Panel>
   );
 }
+export function FeedStatus() {
+  const [status, setStatus] = useState<{
+    configured: boolean;
+    healthy: boolean;
+    lastRun: string | null;
+    error: string | null;
+  } | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    const check = () =>
+      api<NonNullable<typeof status>>('feed-status')
+        .then((s) => {
+          if (active) {
+            setStatus(s);
+            setError('');
+          }
+        })
+        .catch(() => {
+          if (active) setError('Unable to check collection status.');
+        });
+    void check();
+    const timer = setInterval(check, 30000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
+  return (
+    <div className="feed-health" role="status">
+      <span
+        className={`feed-health-dot ${status?.healthy ? 'healthy' : ''}`}
+        aria-hidden
+      />
+      <div>
+        <strong>
+          {error ||
+            (!status
+              ? 'Checking collection status…'
+              : status.healthy
+                ? 'Scheduled collection is running'
+                : status.configured
+                  ? 'Scheduled collection needs attention'
+                  : 'Automatic collection needs deployment')}
+        </strong>
+        <small>
+          {status?.lastRun
+            ? `Last scheduled run: ${new Date(status.lastRun).toLocaleString()}`
+            : 'Manual checks are available. Background checks have not been verified.'}
+          {status?.error ? ` · ${status.error}` : ''}
+        </small>
+      </div>
+    </div>
+  );
+}
 export function Sources() {
   const { data, perform, busy } = useDesk();
-  const [edit, setEdit] = useState<RecordRow<'connector'> | undefined>(),
-    [importSource, setImportSource] = useState<string | null>(null),
-    [name, setName] = useState(''),
-    [type, setType] = useState('github'),
-    [board, setBoard] = useState(''),
-    [repository, setRepository] = useState('vanshb03/Summer2027-Internships'),
-    [path, setPath] = useState('README.md'),
-    [reuse, setReuse] = useState(false),
-    [licenseNotice, setLicenseNotice] = useState(''),
-    [canada, setCanada] = useState(true),
+  const [edit, setEdit] = useState<RecordRow<'connector'>>();
+  const [name, setName] = useState(''),
+    [type, setType] = useState('greenhouse'),
+    [board, setBoard] = useState('');
+  const [repository, setRepository] = useState(''),
+    [path, setPath] = useState('README.md');
+  const [reuse, setReuse] = useState(false),
+    [notice, setNotice] = useState('');
+  const [technical, setTechnical] = useState(true),
     [students, setStudents] = useState(true),
-    [expiry, setExpiry] = useState('');
+    [canada, setCanada] = useState(false),
+    [interval, setIntervalMinutes] = useState(15);
+  const sources = data.connector.filter((c) => isAutomatic(c.data.type));
   return (
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">YOUR DISCOVERY ROUTINE</div>
-          <h1>Sources</h1>
-          <p>Choose the places your opportunities come from.</p>
+          <div className="eyebrow">DIRECT FROM EMPLOYERS</div>
+          <h1>Feed coverage</h1>
+          <p>
+            Vancouver engineering, work from home, and opportunities worth a
+            move.
+          </p>
         </div>
       </div>
+      <FeedStatus />
       <Panel
-        title="Starter job sources"
-        description="Collect Canadian student roles from Tenstorrent, Kepler Communications and a licensed Summer 2027 GitHub list. SFU MyExperience, Intern Insider, Workday, LinkedIn and other sites use URL or pasted-text import. Existing source settings are retained."
+        title="Build your employer watchlist"
+        description="Start with Tenstorrent, Astera Labs, Moment Energy, Kepler, Waabi and 1Password, plus a supplementary GitHub list. Existing board settings and saved jobs are retained."
       >
         <button
           className="button button-primary"
@@ -220,129 +281,66 @@ export function Sources() {
           onClick={() =>
             perform(
               () => api('setup-sources', {}),
-              'Starter sources configured. Refresh the connected sources to collect their jobs.',
+              'Employer watchlist ready. Check boards now to collect jobs.',
             )
           }
         >
-          Set up starter sources
+          Set up employer watchlist
         </button>
+        <p className="desk-muted">
+          Priority boards target five-minute checks after deployment. A
+          successful check can find no new jobs.
+        </p>
       </Panel>
       <div className="desk-source-list">
-        {data.connector.map((c) => (
+        {sources.map((c) => (
           <Panel
             key={c.id}
             title={c.data.name}
-            description={`${c.data.type} · ${c.data.state} · ${['github', 'greenhouse', 'lever'].includes(c.data.type) ? 'Manual / stale-on-open refresh · scheduling not configured' : 'URL / pasted text import only'}`}
+            description={`${sourceHealth(c.data)} · ${c.data.intervalMinutes}-minute target`}
           >
             <p>
-              Last successful sync:{' '}
+              Last complete check:{' '}
               {c.data.lastSync
                 ? new Date(c.data.lastSync).toLocaleString()
-                : 'Never'}
-              {c.data.cursor ? ` · Next batch starts at ${c.data.cursor}` : ''}
+                : 'Not checked yet'}
             </p>
-            {['github', 'greenhouse', 'lever'].includes(c.data.type) && (
-              <p className="desk-muted">
-                Collection:{' '}
-                {c.data.config.canadaOnly
-                  ? 'Explicit Canadian workplaces'
-                  : 'All stated countries'}{' '}
-                ·{' '}
-                {c.data.config.studentOnly
-                  ? 'Intern / co-op / student titles'
-                  : 'All role titles'}
-              </p>
+            {c.data.cursor > 0 && (
+              <p>Processing saved batch · {c.data.cursor} postings processed</p>
             )}
             {c.data.error && <p role="alert">{c.data.error}</p>}
-            {accountSource(c.data.type) && (
-              <div>
-                <p>{accountSource(c.data.type)!.description}</p>
-                <p className="desk-muted">
-                  Sign-in stays on the provider’s website in your browser. Co-op
-                  Desk does not store its password or session, and cannot check
-                  whether you are signed in.
-                </p>
-                <p>
-                  Imports: {c.data.config.importsEnabled ? 'enabled' : 'off'}
-                  {c.data.expiresAt
-                    ? ` · Configured expiry: ${c.data.expiresAt}`
-                    : ''}
-                </p>
-                <div className="desk-actions">
-                  <a
-                    className="button"
-                    href={accountSource(c.data.type)!.loginUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Sign in to {accountSource(c.data.type)!.name}
-                  </a>
-                  <button
-                    className="button"
-                    disabled={busy}
-                    onClick={() =>
-                      perform(
-                        () =>
-                          save(
-                            'connector',
-                            {
-                              ...c.data,
-                              config: {
-                                ...c.data.config,
-                                importsEnabled: !c.data.config.importsEnabled,
-                              },
-                            },
-                            c,
-                          ),
-                        c.data.config.importsEnabled
-                          ? 'Source imports disabled. Existing jobs were retained.'
-                          : 'Source imports enabled. Sign in on the provider’s site, then import a selected job.',
-                      )
-                    }
-                  >
-                    {c.data.config.importsEnabled
-                      ? 'Disable imports'
-                      : 'Enable imports'}
-                  </button>
-                  <button
-                    className="button"
-                    disabled={busy || !!importBlockedReason(c)}
-                    onClick={() =>
-                      setImportSource(importSource === c.id ? null : c.id)
-                    }
-                  >
-                    Import a job
-                  </button>
-                  <a
-                    href={accountSource(c.data.type)!.guideUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Access details
-                  </a>
-                </div>
-                {importBlockedReason(c) && (
-                  <p className="desk-muted">{importBlockedReason(c)}</p>
-                )}
-              </div>
+            {c.data.failures > 0 && c.data.nextRunAt && (
+              <p>Retry after {new Date(c.data.nextRunAt).toLocaleString()}</p>
             )}
+            <p className="desk-muted">
+              {c.data.type === 'github'
+                ? 'Community discovery · descriptions may be incomplete'
+                : 'Direct employer descriptions'}{' '}
+              ·{' '}
+              {c.data.config.studentOnly
+                ? 'Internships / co-ops / students'
+                : 'All role titles'}{' '}
+              ·{' '}
+              {c.data.config.canadaOnly
+                ? 'Canadian workplaces'
+                : 'All locations; filtered in Jobs'}
+            </p>
             <div className="desk-actions">
-              {['github', 'greenhouse', 'lever'].includes(c.data.type) && (
-                <button
-                  className="button"
-                  disabled={busy || c.data.state !== 'connected'}
-                  onClick={() =>
-                    perform(
-                      () => api('sync', { id: c.id }),
-                      'Source refreshed. Refresh again if another batch remains.',
-                    )
-                  }
-                >
-                  Refresh batch
-                </button>
-              )}
               <button
                 className="button"
+                disabled={busy || c.data.state !== 'connected'}
+                onClick={() =>
+                  perform(
+                    () => api('sync', { id: c.id }),
+                    'Board checked. Any remaining batch continues on the next scheduled run.',
+                  )
+                }
+              >
+                Check now
+              </button>
+              <button
+                className="button"
+                disabled={busy}
                 onClick={() =>
                   perform(() =>
                     save(
@@ -350,20 +348,14 @@ export function Sources() {
                       {
                         ...c.data,
                         state:
-                          c.data.state === 'paused'
-                            ? ['github', 'greenhouse', 'lever'].includes(
-                                c.data.type,
-                              )
-                              ? 'connected'
-                              : 'import-only'
-                            : 'paused',
+                          c.data.state === 'connected' ? 'paused' : 'connected',
                       },
                       c,
                     ),
                   )
                 }
               >
-                {c.data.state === 'paused' ? 'Resume' : 'Pause'}
+                {c.data.state === 'connected' ? 'Pause' : 'Resume'}
               </button>
               <button
                 className="button"
@@ -375,102 +367,104 @@ export function Sources() {
                   setRepository(c.data.config.repository || '');
                   setPath(c.data.config.path || 'README.md');
                   setReuse(c.data.config.reuseConfirmed);
-                  setLicenseNotice(c.data.config.licenseNotice || '');
-                  setCanada(c.data.config.canadaOnly ?? false);
-                  setStudents(c.data.config.studentOnly ?? false);
-                  setExpiry(c.data.expiresAt || '');
+                  setNotice(c.data.config.licenseNotice);
+                  setStudents(c.data.config.studentOnly);
+                  setTechnical(c.data.config.technicalOnly);
+                  setCanada(c.data.config.canadaOnly);
+                  setIntervalMinutes(c.data.intervalMinutes);
+                  document
+                    .getElementById('board-editor')
+                    ?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
-                Edit
+                Edit coverage
               </button>
               <button
                 className="text-button"
+                disabled={busy}
                 onClick={() =>
                   perform(
                     () => api('delete/connector', { id: c.id }),
-                    'Source disconnected. Jobs and application history were retained.',
+                    'Board removed. Jobs and application history retained.',
                   )
                 }
               >
-                Disconnect
+                Remove board
               </button>
             </div>
-            {importSource === c.id && (
-              <ImportJob
-                key={c.id}
-                connector={c}
-                onDone={() => setImportSource(null)}
-              />
-            )}
-            {data.sync
-              .filter((r) => r.data.connectorId === c.id)
-              .slice(-3)
-              .map((r) => (
-                <small key={r.id} className="desk-muted">
-                  {r.data.status}: {r.data.processed} processed {r.data.error}
-                </small>
-              ))}
           </Panel>
         ))}
       </div>
-      {!data.connector.length && (
+      {!sources.length && (
         <Empty>
-          Add an employer board or repository below. No automatic sources are
-          enabled yet.
+          Set up the employer watchlist to begin collecting public postings.
         </Empty>
       )}
-      <Panel title={edit ? 'Edit source' : 'Add a source'}>
-        <div className="desk-form-grid">
-          <Field label="Source type">
-            <select value={type} onChange={(e) => setType(e.target.value)}>
-              {connectorSchema.shape.type.options.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Employer or source name">
-            <input value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          {type === 'github' ? (
-            <>
-              <Field label="GitHub owner/repository">
-                <input
-                  value={repository}
-                  onChange={(e) => setRepository(e.target.value)}
-                />
-              </Field>
-              <Field label="Table file path">
-                <input value={path} onChange={(e) => setPath(e.target.value)} />
-              </Field>
-            </>
-          ) : (
-            ['greenhouse', 'lever'].includes(type) && (
-              <Field label="Employer board identifier">
+      <div id="board-editor">
+        <Panel
+          title={edit ? 'Edit employer board' : 'Add an employer board'}
+          description="Find the board name in the employer’s public careers link. No employer account is needed."
+        >
+          <div className="desk-form-grid">
+            <Field label="Board platform">
+              <select
+                disabled={!!edit}
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+              >
+                {automaticTypes.map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Employer or list name">
+              <input value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+            {type === 'github' ? (
+              <>
+                <Field label="GitHub owner/repository">
+                  <input
+                    value={repository}
+                    onChange={(e) => setRepository(e.target.value)}
+                  />
+                </Field>
+                <Field label="Table file path">
+                  <input
+                    value={path}
+                    onChange={(e) => setPath(e.target.value)}
+                  />
+                </Field>
+              </>
+            ) : (
+              <Field label="Public board name">
                 <input
                   value={board}
                   onChange={(e) => setBoard(e.target.value)}
+                  placeholder="e.g. momentenergy"
                 />
               </Field>
-            )
-          )}
-          <Field label="Subscription expiry, optional">
-            <input
-              type="date"
-              value={expiry}
-              onChange={(e) => setExpiry(e.target.value)}
-            />
-          </Field>
-        </div>
-        {['github', 'greenhouse', 'lever'].includes(type) && (
-          <fieldset className="desk-checks">
-            <legend>Collection scope</legend>
+            )}
+            <Field label="Target check interval">
+              <select
+                value={interval}
+                onChange={(e) => setIntervalMinutes(Number(e.target.value))}
+              >
+                {[5, 15, 30, 60].map((n) => (
+                  <option key={n} value={n}>
+                    Every {n} minutes
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="desk-checks">
             <label>
               <input
                 type="checkbox"
-                checked={canada}
-                onChange={(e) => setCanada(e.target.checked)}
+                checked={technical}
+                onChange={(e) => setTechnical(e.target.checked)}
               />
-              Canadian workplaces only (exclude unknown country)
+              Broad tech and engineering titles
             </label>
             <label>
               <input
@@ -478,77 +472,90 @@ export function Sources() {
                 checked={students}
                 onChange={(e) => setStudents(e.target.checked)}
               />
-              Intern, co-op or student role titles only
+              Intern / co-op / student roles only
             </label>
-          </fieldset>
-        )}
-        {type === 'github' && (
-          <Field
-            label="Repository license / attribution notice"
-            hint="Retained with imported listing snapshots."
-          >
-            <textarea
-              rows={4}
-              value={licenseNotice}
-              onChange={(e) => setLicenseNotice(e.target.value)}
-            />
-          </Field>
-        )}
-        {type === 'github' && (
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={reuse}
-              onChange={(e) => setReuse(e.target.checked)}
-            />
-            I reviewed the repository format and reuse terms. Collection imports
-            its table, not full descriptions.
-          </label>
-        )}
-        {!['github', 'greenhouse', 'lever'].includes(type) && (
-          <p>
-            Automatic access is not verified for this source. Use the import
-            form below; no session cookies or login credentials are collected.
-          </p>
-        )}
-        <button
-          className="button button-primary"
-          disabled={busy || !name}
-          onClick={() =>
-            perform(async () => {
-              await save(
-                'connector',
-                connectorSchema.parse({
-                  ...edit?.data,
-                  name,
-                  type,
-                  state: ['github', 'greenhouse', 'lever'].includes(type)
-                    ? 'connected'
-                    : 'import-only',
-                  config: {
-                    ...edit?.data.config,
-                    board,
-                    repository,
-                    path,
-                    reuseConfirmed: reuse,
-                    licenseNotice,
-                    canadaOnly: canada,
-                    studentOnly: students,
-                  },
-                  cursor: 0,
-                  etag: null,
-                  expiresAt: expiry || null,
-                }),
-                edit,
-              );
-              setEdit(undefined);
-              setName('');
-            })
-          }
-        >
-          {edit ? 'Save source' : 'Add source'}
-        </button>
-      </Panel>
+            <label>
+              <input
+                type="checkbox"
+                checked={canada}
+                onChange={(e) => setCanada(e.target.checked)}
+              />
+              Collect Canadian workplaces only
+            </label>
+          </div>
+          {type === 'github' && (
+            <>
+              <Field label="License / attribution notice">
+                <textarea
+                  value={notice}
+                  onChange={(e) => setNotice(e.target.value)}
+                />
+              </Field>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={reuse}
+                  onChange={(e) => setReuse(e.target.checked)}
+                />
+                I reviewed this repository’s reuse terms.
+              </label>
+            </>
+          )}
+          <div className="desk-actions">
+            <button
+              className="button button-primary"
+              disabled={busy || !name.trim()}
+              onClick={() =>
+                perform(async () => {
+                  await save(
+                    'connector',
+                    connectorSchema.parse({
+                      ...edit?.data,
+                      name,
+                      type,
+                      state: edit?.data.state || 'connected',
+                      intervalMinutes: interval,
+                      config: {
+                        ...edit?.data.config,
+                        board,
+                        repository,
+                        path,
+                        studentOnly: students,
+                        technicalOnly: technical,
+                        canadaOnly: canada,
+                        reuseConfirmed: reuse,
+                        licenseNotice: notice,
+                      },
+                    }),
+                    edit,
+                  );
+                  setEdit(undefined);
+                  setName('');
+                  setBoard('');
+                }, 'Employer board saved.')
+              }
+            >
+              {edit ? 'Save coverage' : 'Add board'}
+            </button>
+            {edit && (
+              <button
+                className="text-button"
+                onClick={() => {
+                  setEdit(undefined);
+                  setName('');
+                  setBoard('');
+                }}
+              >
+                Cancel edit
+              </button>
+            )}
+          </div>
+        </Panel>
+      </div>
+      <p className="desk-muted">
+        Earlier imported jobs retain their original sources. Subscription and
+        university accounts are no longer part of feed setup.
+      </p>
       <ImportJob />
     </>
   );

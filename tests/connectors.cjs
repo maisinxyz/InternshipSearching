@@ -25,7 +25,11 @@ assert.equal(listings[0].company, 'Example');
 assert.equal(listings[1].company, 'Example');
 assert.equal(listings[0].url, 'https://example.com/jobs/one?job=1');
 assert.equal(listings[0].posted, null, 'A yearless date must remain unknown');
-assert.equal(listings[1].posted, '2026-10-13');
+assert.equal(
+  listings[1].posted,
+  null,
+  'Repository dates are not employer publication dates',
+);
 assert.equal(sourceLocation('Toronto, Ontario').country, 'Canada');
 assert.equal(
   sourceLocation('Vancouver, British Columbia, Canada').province,
@@ -40,6 +44,35 @@ assert.equal(
 assert.equal(
   collectionItems(listings, { canadaOnly: false, studentOnly: false }).length,
   5,
+);
+const mixedRemote = parseGithub(
+  `| Company | Role | Location | Apply | Date |
+| --- | --- | --- | --- | --- |
+| Example | Software Intern | Toronto, Canada<br>Remote | [Apply](https://example.com/mixed) | Oct 18 |`,
+  'https://github.com/example/list',
+);
+assert.equal(
+  normalize(mixedRemote[0], 'test-owner', 'github-test', 'Example').opportunity
+    .remoteBC.status,
+  'not-stated',
+);
+assert.equal(
+  collectionItems(
+    [
+      {
+        ...listings[0],
+        title: 'Finance Intern - Technical Accounting & Treasury',
+      },
+    ],
+    { technicalOnly: true },
+  ).length,
+  0,
+);
+assert.equal(
+  collectionItems([{ ...listings[0], title: 'Technical Support Intern' }], {
+    technicalOnly: true,
+  }).length,
+  1,
 );
 console.log(
   'Passed: GitHub HTML/Markdown links, company continuation, date precision, country classification and explicit collection scope.',
@@ -150,6 +183,10 @@ if (process.argv.includes('--live')) {
     for (const url of [
       'https://boards-api.greenhouse.io/v1/boards/tenstorrentuniversity/jobs?content=true',
       'https://api.lever.co/v0/postings/kepler?mode=json',
+      'https://boards-api.greenhouse.io/v1/boards/asteraearlycareer2027/jobs?content=true',
+      'https://boards-api.greenhouse.io/v1/boards/momentenergy/jobs?content=true',
+      'https://api.lever.co/v0/postings/waabi?mode=json',
+      'https://api.ashbyhq.com/posting-api/job-board/1password?includeCompensation=true',
       'https://api.github.com/repos/vanshb03/Summer2027-Internships/contents/README.md',
     ]) {
       const response = await safeFetch(url);
@@ -160,10 +197,25 @@ if (process.argv.includes('--live')) {
           Array.isArray(data.jobs) ||
           data.encoding === 'base64',
       );
-      console.log('Verified pinned public fetch:', new URL(url).hostname);
+      if (url.includes('ashbyhq')) {
+        const { parseAshby } = require('../src/server/connectors.ts');
+        assert.ok(parseAshby(data, '1Password').length);
+      }
+      console.log(
+        'Verified pinned public fetch:',
+        new URL(url).hostname,
+        new URL(url).pathname,
+      );
     }
   })().catch((error) => {
     console.error(error.message);
     process.exitCode = 1;
   });
 }
+
+assert.equal(
+  collectionItems([{ ...listings[0], title: 'Business Development Intern' }], {
+    technicalOnly: true,
+  }).length,
+  0,
+);

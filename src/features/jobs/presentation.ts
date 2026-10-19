@@ -1,6 +1,9 @@
 import type { Arrangement, Discipline, Job, SourceDate } from '@/domain/job';
 
 export const disciplineLabels: Record<Discipline, string> = {
+  'data-ai': 'Data & AI',
+  'it-cloud': 'IT & cloud',
+  'technical-product': 'Technical product',
   embedded: 'Embedded',
   electronics: 'Electronics',
   robotics: 'Robotics',

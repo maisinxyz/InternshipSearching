@@ -140,7 +140,10 @@ export async function safeFetch(
               status === 429
                 ? 'Source rate limit reached. Try later.'
                 : 'This page is unavailable or requires sign-in. Paste its description instead.',
-              status === 429 ? 429 : 422,
+              status >= 500 || status === 429 ? status : 422,
+              res.headers['retry-after']
+                ? retryAfterMs(String(res.headers['retry-after']))
+                : undefined,
             ),
           );
           return;
@@ -223,4 +226,14 @@ export function readable(html: string) {
     .replace(/[ \t]+/g, ' ')
     .replace(/\n\s*\n/g, '\n\n')
     .trim();
+}
+
+export function retryAfterMs(value: string, now = Date.now()) {
+  const seconds = Number(value);
+  return Math.max(
+    0,
+    Number.isFinite(seconds)
+      ? seconds * 1000
+      : (Date.parse(value) || now) - now,
+  );
 }

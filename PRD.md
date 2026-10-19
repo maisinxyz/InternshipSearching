@@ -1,5 +1,17 @@
 # PRD — Personal Co-op & Internship Dashboard
 
+## Active checkpoint amendment — 2026-10-18
+
+The user authorized implementing the direct employer feed researched in
+[docs/direct-job-feed-research.md](docs/direct-job-feed-research.md), then explicitly
+requested finishing locally and deploying later. This supersedes the
+connection-first workflow and daily-only scheduling baseline below. The current
+checkpoint adds public Greenhouse/Lever/Ashby collection, stable batches,
+scheduler support, Vancouver/BC-remote/relocation views, source evidence and
+an editable relocation comparison. Retain historical jobs and user state.
+Subscription and SFU accounts are no longer part of feed setup. Actual unattended
+collection, hosted database migration and a multi-day pilot remain deployment work.
+
 Version: 1.0
 Owner / primary user: Vince Ong
 Working name: Co-op Desk
