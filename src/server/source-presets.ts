@@ -63,6 +63,13 @@ export const sourcePresets = [
     ['starter-moment', 'Moment Energy', 'greenhouse', 'momentenergy', 5],
     ['starter-waabi', 'Waabi', 'lever', 'waabi', 15],
     ['starter-1password', '1Password', 'ashby', '1password', 15],
+    ['starter-apera', 'Apera AI', 'greenhouse', 'aperaaiinc', 15],
+    ['starter-later', 'Later', 'greenhouse', 'later', 15],
+    ['starter-cohere', 'Cohere', 'ashby', 'cohere', 15],
+    ['starter-super', 'Super.com', 'ashby', 'super.com', 15],
+    ['starter-harvey', 'Harvey', 'ashby', 'harvey', 15],
+    ['starter-geotab', 'Geotab', 'greenhouse', 'geotab', 15],
+    ['starter-samsara', 'Samsara', 'greenhouse', 'samsara', 15],
   ].map(([id, name, type, board, intervalMinutes]) => ({
     id: String(id),
     data: connectorSchema.parse({

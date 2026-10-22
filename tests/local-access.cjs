@@ -3,29 +3,98 @@ const assert = require('node:assert/strict');
 const { mkdtempSync, rmSync } = require('node:fs');
 const { LocalStore } = require('../src/server/local-store.ts');
 const { localOpenAccess } = require('../src/server/local-access.ts');
-const { session, configured } = require('../src/server/auth.ts');
+const { session, configured, sameOrigin } = require('../src/server/auth.ts');
+const {
+  workerRepository,
+  schedulerStatus,
+  schedulerAuthorized,
+} = require('../src/server/scheduler.ts');
 (async () => {
   const oldFlag = process.env.LOCAL_OPEN_ACCESS,
-    oldVercel = process.env.VERCEL;
+    oldVercel = process.env.VERCEL,
+    oldSecret = process.env.CRON_SECRET,
+    oldServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   try {
     delete process.env.LOCAL_OPEN_ACCESS;
     delete process.env.VERCEL;
     assert.equal(localOpenAccess(), false);
     process.env.LOCAL_OPEN_ACCESS = 'true';
     assert.equal(localOpenAccess(), true);
+    const localRequest = (origin, host = '127.0.0.1:3001') =>
+      new Request('http://localhost:3001/api/desk/sync', {
+        headers: { origin, host },
+      });
+    assert.doesNotThrow(() =>
+      sameOrigin(localRequest('http://127.0.0.1:3001')),
+    );
+    assert.throws(
+      () => sameOrigin(localRequest('http://example.com:3001')),
+      /origin/,
+    );
+    assert.throws(
+      () => sameOrigin(localRequest('http://127.0.0.1:3002')),
+      /origin/,
+    );
+    assert.throws(
+      () =>
+        sameOrigin(localRequest('http://127.0.0.1:3001', 'example.com:3001')),
+      /origin/,
+    );
+    assert.throws(
+      () => sameOrigin(new Request('http://localhost:3001/api/desk/sync')),
+      /origin/,
+    );
     assert.equal(configured(), true);
     assert.deepEqual(await session(), {
       token: '',
       owner: 'local-workspace',
       local: true,
     });
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.CRON_SECRET = 'local-test-secret-'.repeat(3);
+    assert.deepEqual(workerRepository().auth, {
+      token: '',
+      owner: 'local-workspace',
+      local: true,
+    });
+    const emptyHeartbeat = { get: async () => null };
+    assert.equal((await schedulerStatus(emptyHeartbeat)).configured, true);
+    assert.equal((await schedulerStatus(emptyHeartbeat)).healthy, false);
+    assert.equal(
+      (
+        await schedulerStatus({
+          get: async () => ({
+            updated_at: new Date().toISOString(),
+            data: { status: 'complete', error: 'Some boards failed.' },
+          }),
+        })
+      ).healthy,
+      false,
+    );
+    assert.equal(
+      schedulerAuthorized(null),
+      false,
+      'local mode does not bypass scheduler authorization',
+    );
+    process.env.CRON_SECRET = 'short';
+    assert.equal((await schedulerStatus(emptyHeartbeat)).configured, false);
     process.env.VERCEL = '1';
     assert.equal(localOpenAccess(), false);
+    assert.throws(
+      () => workerRepository(),
+      /credential|configured/,
+      'hosted mode cannot select the local worker',
+    );
   } finally {
     if (oldFlag === undefined) delete process.env.LOCAL_OPEN_ACCESS;
     else process.env.LOCAL_OPEN_ACCESS = oldFlag;
     if (oldVercel === undefined) delete process.env.VERCEL;
     else process.env.VERCEL = oldVercel;
+    if (oldSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = oldSecret;
+    if (oldServiceKey === undefined)
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = oldServiceKey;
   }
   const dir = mkdtempSync('/private/tmp/desk-local-test-');
   let store = new LocalStore(dir);

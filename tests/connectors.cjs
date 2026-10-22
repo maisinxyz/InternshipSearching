@@ -1,14 +1,41 @@
 // Reuse the dependency-free TypeScript test loader and browsing regressions.
 require('./browsing.cjs');
 const assert = require('node:assert/strict');
-const { parseGithub, collectionItems } = require('../src/server/connectors.ts');
+const {
+  parseGithub,
+  collectionItems,
+  validateConnector,
+} = require('../src/server/connectors.ts');
 const { sourceLocation } = require('../src/domain/source-location.ts');
-const { safeFetch } = require('../src/server/safe-fetch.ts');
+const { safeFetch, responseByteLimit } = require('../src/server/safe-fetch.ts');
 const { normalize, ingest } = require('../src/server/ingestion.ts');
 const {
   sourcePresets,
   setupSourcePresets,
 } = require('../src/server/source-presets.ts');
+
+assert.equal(
+  validateConnector({
+    type: 'ashby',
+    name: 'Super.com',
+    config: { board: 'super.com' },
+  }).config.board,
+  'super.com',
+);
+for (const board of [
+  '../secret',
+  'super.com?other=1',
+  'super.com/path',
+  'a..b',
+])
+  assert.throws(() =>
+    validateConnector({ type: 'ashby', name: 'Invalid', config: { board } }),
+  );
+for (const preset of sourcePresets) validateConnector(preset.data);
+assert.equal(responseByteLimit('api.ashbyhq.com'), 8000000);
+assert.equal(responseByteLimit('boards-api.greenhouse.io'), 8000000);
+assert.equal(responseByteLimit('example.com'), 3000000);
+assert.equal(responseByteLimit('api.ashbyhq.com.example.com'), 3000000);
 
 const listings = parseGithub(
   `| Company | Role | Location | Apply | Date |
@@ -188,6 +215,13 @@ if (process.argv.includes('--live')) {
       'https://api.lever.co/v0/postings/waabi?mode=json',
       'https://api.ashbyhq.com/posting-api/job-board/1password?includeCompensation=true',
       'https://api.github.com/repos/vanshb03/Summer2027-Internships/contents/README.md',
+      ...sourcePresets
+        .slice(7)
+        .map(({ data }) =>
+          data.type === 'ashby'
+            ? `https://api.ashbyhq.com/posting-api/job-board/${data.config.board}?includeCompensation=true`
+            : `https://boards-api.greenhouse.io/v1/boards/${data.config.board}/jobs?content=true`,
+        ),
     ]) {
       const response = await safeFetch(url);
       assert.equal(response.status, 200);
@@ -199,7 +233,7 @@ if (process.argv.includes('--live')) {
       );
       if (url.includes('ashbyhq')) {
         const { parseAshby } = require('../src/server/connectors.ts');
-        assert.ok(parseAshby(data, '1Password').length);
+        assert.ok(Array.isArray(parseAshby(data, 'Live employer')));
       }
       console.log(
         'Verified pinned public fetch:',
@@ -218,4 +252,18 @@ assert.equal(
     technicalOnly: true,
   }).length,
   0,
+);
+assert.equal(
+  collectionItems(
+    [{ ...listings[0], title: 'Account Development Representative Intern' }],
+    { technicalOnly: true },
+  ).length,
+  0,
+);
+assert.equal(
+  collectionItems(
+    [{ ...listings[0], title: 'Machine Learning Applied Scientist (Co-op)' }],
+    { technicalOnly: true, studentOnly: true },
+  ).length,
+  1,
 );

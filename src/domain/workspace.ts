@@ -99,7 +99,7 @@ export const connectorSchema = z.object({
   etag: short.nullable().default(null),
   cursor: z.number().int().nonnegative().default(0),
   error: short.nullable().default(null),
-  adapterVersion: z.enum(['1', '2', '3']).default('3'),
+  adapterVersion: z.enum(['1', '2', '3', '4']).default('4'),
 });
 export const factSchema = z.object({
   text: text.min(1),

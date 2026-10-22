@@ -18,6 +18,11 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Owner-only access requires
 Supabase configuration in the ignored `.env.local`; see
 [deployment setup](docs/deployment.md). `/preview` works without private configuration.
 
+The current local session runs on port **3001** because another project occupies 3000. For browser-independent collection, keep the server running and run
+`npm run feed:watch` in another terminal. This requires the explicit local mode
+and server-only scheduler secret described in
+[local background collection](docs/deployment.md#local-background-collection).
+
 ```sh
 npm run typecheck
 npm run test:browsing

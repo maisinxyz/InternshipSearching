@@ -1,3 +1,30 @@
+# Expanded local collection verified — 2026-10-20
+
+Fourteen sources are configured in the local SQLite workspace. Added the following
+public employer boards through the existing adapters; all endpoint checks passed:
+
+| Employer  | Board                   | Matching technical student roles retained       |
+| --------- | ----------------------- | ----------------------------------------------- |
+| Apera AI  | Greenhouse `aperaaiinc` | 3                                               |
+| Later     | Greenhouse `later`      | 3                                               |
+| Cohere    | Ashby `cohere`          | 3                                               |
+| Super.com | Ashby `super.com`       | 0 currently                                     |
+| Harvey    | Ashby `harvey`          | 2                                               |
+| Geotab    | Greenhouse `geotab`     | 0 currently                                     |
+| Samsara   | Greenhouse `samsara`    | 3 (two earlier sales imports reversibly hidden) |
+
+The complete local feed now retains 118 jobs, with 113 visible and 18 Metro
+Vancouver matches. Counts include additional discoveries from existing sources;
+they do not establish publication today. New-board initial inventory retains
+baseline markers. Search-indexed expired jobs were not used to populate empty
+boards. Employer API snapshots are authoritative for this collection.
+
+The local background worker is active on port 3001 and has completed multiple
+heartbeats; all 14 source checks completed without errors or pending batches.
+See [local background collection](deployment.md#local-background-collection) for
+runtime requirements. Hosted deployment and overnight/weekend acceptance remain
+deferred. The following entries are historical snapshots.
+
 # Local collection verified — 2026-10-18
 
 Seven sources are now configured and collected in the shared local SQLite

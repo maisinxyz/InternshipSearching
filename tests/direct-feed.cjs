@@ -72,6 +72,26 @@ const listing = {
   updated: null,
 };
 (async () => {
+  const nullWorkplace = parseAshby(
+    {
+      jobs: [
+        {
+          title: 'Software Engineer Intern',
+          jobUrl: 'https://example.com/intern',
+          applyUrl: 'https://example.com/intern/apply',
+          isListed: true,
+          descriptionPlain: 'Engineering internship.',
+          workplaceType: null,
+        },
+      ],
+    },
+    'Example',
+  );
+  assert.equal(
+    nullWorkplace[0].arrangement,
+    'unknown',
+    'nullable Ashby workplace does not fail the entire board',
+  );
   const remote = parseAshby(
     {
       jobs: [

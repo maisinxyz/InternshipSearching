@@ -1,5 +1,20 @@
 # Temporary local open workspace — 2026-10-18
 
+Local collection update (2026-10-20): `scripts/feed-watch.mjs` dispatches the
+existing bearer-protected `/api/sync` endpoint every minute on loopback port 3001.
+`workerRepository()` selects the local SQLite repository only under the existing
+explicit local-access opt-in; hosted mode still requires its server credential.
+No bearer secret reaches the client or a supplied remote URL. Due dates, source
+and scheduler leases, bounded batches, retries and heartbeat records remain shared
+with manual collection. Failed board runs make heartbeat health false. The worker
+is a separate local process, not an installed login service or hosted scheduler.
+
+Seven new reviewed presets cover Apera AI, Later, Cohere, Super.com, Harvey,
+Geotab and Samsara. Ashby board identifiers accept dots without allowing paths,
+queries or traversal. Nullable workplace type maps to unknown. Exact public ATS
+API hosts accept bounded responses up to 8 MB; general imports retain 3 MB, with
+unchanged DNS pinning, private-address rejection and redirect/deadline checks.
+
 `LOCAL_OPEN_ACCESS=true` selects a shared local session and a SQLite-backed
 repository in `.local/workspace.sqlite`. Both loopback servers share persisted
 records, revision checks and leases. This does not use a privileged key or change

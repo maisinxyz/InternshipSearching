@@ -1,5 +1,13 @@
 # UI component provenance
 
+## Internship board reference — October 20, 2026
+
+The public [Intern Insider preview](https://interninsider.me/) informed the
+compact listing layout, quick filters and visible save-search controls. The
+implementation uses Co-op Desk's existing JobCard, Sheet, icons and filter
+contract with original local CSS. No Intern Insider code, branding, screenshots,
+listing database or marketing claims were copied.
+
 Inspected for Step 1 on October 13, 2026. No component service or UI subscription is needed at runtime. No marketplace screenshots, avatars, or preview assets are copied.
 
 | Component         | Original URL / author                                                                                                                                                         | License                                                      | Dependencies                                                                           | Selection and modifications                                                                                                                                                                                                                                                                                           | Attribution                                                                                            |

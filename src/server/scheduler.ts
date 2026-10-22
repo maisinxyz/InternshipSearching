@@ -4,6 +4,7 @@ import { config, DeskError } from './auth';
 import { Repository } from './repository';
 import { syncConnector } from './connectors';
 import { isAutomatic } from '@/domain/collection';
+import { localOpenAccess, localOwner } from './local-access';
 
 export function schedulerAuthorized(
   header: string | null,
@@ -15,6 +16,8 @@ export function schedulerAuthorized(
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 export function workerRepository() {
+  if (localOpenAccess())
+    return new Repository({ owner: localOwner, token: '', local: true });
   const { owner } = config();
   const token = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!token)
@@ -63,12 +66,15 @@ export async function schedulerStatus(repo: Repository) {
   const lastRun = heartbeat?.updated_at || null;
   return {
     configured: !!(
-      process.env.CRON_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY
+      process.env.CRON_SECRET &&
+      process.env.CRON_SECRET.length >= 32 &&
+      (localOpenAccess() || process.env.SUPABASE_SERVICE_ROLE_KEY)
     ),
     lastRun,
     healthy:
       !!lastRun &&
       heartbeat?.data.status === 'complete' &&
+      !heartbeat.data.error &&
       Date.now() - Date.parse(lastRun) < 180000,
     error: heartbeat?.data.error || null,
   };

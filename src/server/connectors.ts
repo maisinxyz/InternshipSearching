@@ -7,7 +7,7 @@ import { Repository } from './repository';
 import { DeskError } from './auth';
 import { sourceLocation } from '@/domain/source-location';
 import { isAutomatic } from '@/domain/collection';
-const adapterVersion = '3';
+const adapterVersion = '4';
 export const capabilities = {
   github: { scheduled: true, descriptions: false, closure: false },
   greenhouse: { scheduled: true, descriptions: true, closure: false },
@@ -34,7 +34,12 @@ export function validateConnector(input: unknown) {
         (c.config.path || '').includes('..')
       )
         throw new DeskError('Invalid repository file path.');
-    } else if (!/^[\w-]+$/.test(c.config.board || ''))
+    } else if (
+      !(c.type === 'ashby' ? /^[\w.-]+$/ : /^[\w-]+$/).test(
+        c.config.board || '',
+      ) ||
+      c.config.board?.includes('..')
+    )
       throw new DeskError('Enter the employer board identifier.');
   } else c.state = c.state === 'paused' ? 'paused' : 'import-only';
   return c;
@@ -149,7 +154,7 @@ export function parseAshby(payload: unknown, company: string): Listing[] {
             .array(z.object({ location: z.string() }))
             .optional(),
           publishedAt: z.string().optional(),
-          workplaceType: z.string().optional(),
+          workplaceType: z.string().nullable().optional(),
           employmentType: z.string().optional(),
         }),
       ),
@@ -312,10 +317,10 @@ export function collectionItems(
             (location) => sourceLocation(location).country === 'Canada',
           )) &&
         (!config.technicalOnly ||
-          (!/\bfinance\b|\baccounting\b|\bbusiness development\b|\bmarketing\b|\bhuman resources\b|\brecruit(?:er|ing|ment)\b/i.test(
+          (!/\bfinance\b|\baccounting\b|\bbusiness development\b|\baccount development\b|\bsales\b|\bmarketing\b|\bhuman resources\b|\brecruit(?:er|ing|ment)\b/i.test(
             item.title,
           ) &&
-            /engineer|develop|software|firmware|hardware|electr|robot|control|automat|manufactur|mechanic|test|quality|data|analyst|\bAI\b|\bML\b|\bIT\b|cloud|security|product|technical (?:support|program|product|operations|analyst)|design|research/i.test(
+            /engineer|develop|software|firmware|hardware|electr|robot|control|automat|manufactur|mechanic|test|quality|data|analyst|\bAI\b|\bML\b|machine learning|\bIT\b|cloud|security|product|technical (?:support|program|product|operations|analyst)|design|research/i.test(
               item.title,
             ))) &&
         (!config.studentOnly ||

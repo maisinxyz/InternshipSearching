@@ -52,7 +52,27 @@ export async function session(): Promise<Session> {
 }
 export function sameOrigin(request: Request) {
   const origin = request.headers.get('origin');
-  if (!origin || origin !== new URL(request.url).origin)
+  const expected = new URL(request.url);
+  // Next may normalize a loopback request to localhost internally.
+  const host = request.headers.get('host');
+  if (
+    localOpenAccess() &&
+    host &&
+    ['localhost', '127.0.0.1'].includes(expected.hostname)
+  ) {
+    try {
+      const incoming = new URL(`${expected.protocol}//${host}`);
+      if (
+        ['localhost', '127.0.0.1'].includes(incoming.hostname) &&
+        incoming.port === expected.port &&
+        incoming.host === host
+      )
+        expected.host = incoming.host;
+    } catch {
+      throw new DeskError('Request origin is not allowed.', 403);
+    }
+  }
+  if (!origin || origin !== expected.origin)
     throw new DeskError('Request origin is not allowed.', 403);
 }
 export async function body(request: Request, limit = 1500000) {

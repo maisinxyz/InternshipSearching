@@ -1,5 +1,16 @@
 # PRD — Personal Co-op & Internship Dashboard
 
+## Feed expansion checkpoint — 2026-10-20
+
+The user prioritized finding more internships and keeping listings fresh when
+asking to recreate Intern Insider. Expand the reviewed public-employer watchlist
+and activate a local background poller using the existing due-work, leases,
+backoff, baseline and heartbeat contracts. Keep the existing local workspace and
+source history. The browser may close; collection still requires the Mac, server
+and worker to remain running. Hosted deployment remains deferred. Do not claim
+Intern Insider's inventory, universal coverage or real-time publication latency.
+Retain the completed compact browsing changes from the initial reference pass.
+
 ## Active checkpoint amendment — 2026-10-18
 
 The user authorized implementing the direct employer feed researched in

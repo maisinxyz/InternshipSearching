@@ -49,6 +49,17 @@ export function publicUrl(value: string) {
     throw new DeskError('Only public HTTP(S) addresses are supported.');
   return url;
 }
+export function responseByteLimit(hostname: string) {
+  return [
+    'boards-api.greenhouse.io',
+    'api.ashbyhq.com',
+    'api.lever.co',
+    'api.eu.lever.co',
+  ].includes(hostname)
+    ? 8000000
+    : 3000000;
+}
+
 export async function safeFetch(
   value: string,
   headers: Record<string, string> = {},
@@ -162,8 +173,10 @@ export async function safeFetch(
         let size = 0;
         res.on('data', (chunk) => {
           size += chunk.length;
-          if (size > 3000000) {
-            req.destroy(new DeskError('Page exceeds the import size limit.'));
+          if (size > responseByteLimit(url.hostname)) {
+            req.destroy(
+              new DeskError('Source response exceeds the size limit.'),
+            );
             return;
           }
           chunks.push(chunk);

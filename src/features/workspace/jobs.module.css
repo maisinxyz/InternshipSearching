@@ -1,0 +1,146 @@
+.board {
+  --board-line: #dce7e2;
+}
+
+.board :global(.page-heading) {
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--board-line);
+}
+
+.board :global(.page-heading h1) {
+  font-size: clamp(26px, 3vw, 38px);
+  letter-spacing: -1.2px;
+}
+
+.board :global(.feed-views) {
+  gap: 6px;
+}
+
+.board :global(.feed-views .button) {
+  border-radius: 24px;
+}
+
+.board :global(.desk-searchbar) {
+  padding: 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 12px;
+  background: white;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.board :global(.desk-searchbar .search-field) {
+  min-width: 220px;
+}
+
+.board :global(.desk-searchbar input) {
+  border: 0;
+  background: transparent;
+}
+
+.quickFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.quickFilters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  flex: 1 1 160px;
+}
+
+.quickFilters select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 7px;
+  background: white;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.layoutControls {
+  display: flex;
+  gap: 4px;
+}
+
+.layoutControls button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.board :global(.results-toolbar) {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.list :global(.job-card) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.7fr);
+  column-gap: 28px;
+  padding: 20px 24px 0;
+}
+
+.list :global(.card-company-row) {
+  grid-column: 1 / -1;
+  margin-bottom: 12px;
+}
+
+.list :global(.card-title) {
+  grid-column: 1;
+}
+
+.list :global(.card-location) {
+  grid-column: 1;
+  margin-top: 6px;
+}
+
+.list :global(.card-facts) {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  margin: 0;
+  justify-content: center;
+  border-left: 1px solid var(--board-line);
+  padding-left: 24px;
+}
+
+.list :global(.technology-list) {
+  grid-column: 1 / -1;
+  margin: 14px 0;
+}
+
+.list :global(.card-footer) {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+@media (max-width: 700px) {
+  .list :global(.job-card) {
+    display: flex;
+    padding: 18px 18px 0;
+  }
+
+  .list :global(.card-facts) {
+    margin: 14px 0 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .board :global(.desk-searchbar .search-field) {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+}

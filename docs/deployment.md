@@ -1,3 +1,31 @@
+## Local background collection
+
+The local worker uses the existing scheduler endpoint without a Supabase service
+key when `LOCAL_OPEN_ACCESS=true`. Set a random `CRON_SECRET` of at least 32
+characters in ignored `.env.local`, then restart the server. Keep both processes
+running in separate terminals from the repository root:
+
+```sh
+npm run build
+npm start -- --port 3001
+# In another terminal:
+npm run feed:watch
+```
+
+The worker checks due sources each minute; employer intervals remain 5 or 15
+minutes and GitHub 60 minutes. It respects saved batches, backoff and leases;
+an overlapping run can return 409 and retry next minute. Use
+`npm run feed:watch -- 3002` for another loopback port. The URL host is fixed to
+loopback and redirects are refused so the bearer secret cannot follow a redirect.
+Check Jobs or `/api/desk/feed-status` for the last completed heartbeat and source
+errors. A failed board makes the overall status unhealthy until a subsequent
+successful run. No notifications are sent.
+
+Closing the browser does not stop collection. Sleep, shutdown, stopped terminals
+or a stopped server do; the worker retries after temporary server failures.
+This is not installed at login and does not run on a sleeping/offline Mac.
+Hosted all-day collection still requires the deployment steps below.
+
 ## Temporary local access
 
 The current ignored `.env.local` enables `LOCAL_OPEN_ACCESS=true`. Open either

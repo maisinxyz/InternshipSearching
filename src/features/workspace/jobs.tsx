@@ -1,6 +1,16 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import {
+  RefreshCw,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  LayoutGrid,
+  List,
+  Bookmark,
+} from 'lucide-react';
+import styles from './jobs.module.css';
+import { disciplineLabels } from '@/features/jobs/presentation';
 import { type Job, type UserJobState, disciplineSchema } from '@/domain/job';
 import {
   filtersSchema,
@@ -38,6 +48,7 @@ export function JobsFeed() {
     [open, setOpen] = useState(false),
     [importing, setImporting] = useState(false);
   const [updates, setUpdates] = useState(false);
+  const [layout, setLayout] = useState<'list' | 'grid'>('list');
   const focus = useRef<HTMLButtonElement | null>(null);
   const current = useRef(0);
   function patch(value: Partial<Filters>) {
@@ -109,12 +120,15 @@ export function JobsFeed() {
   const search = data.search.find((s) => s.id === searchId);
   const watermark = data.visit[0]?.data.previous;
   return (
-    <>
+    <section className={styles.board} aria-label="Internship job board">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">MAKE YOUR NEXT MOVE</div>
-          <h1>Your next opportunity</h1>
-          <p>Engineering and tech roles, direct from public employer boards.</p>
+          <div className="eyebrow">YOUR INTERNSHIP SEARCH</div>
+          <h1>Find your next internship.</h1>
+          <p>
+            Explore engineering and tech opportunities. Save the ones worth a
+            closer look.
+          </p>
         </div>
         <div className="desk-actions">
           <button
@@ -223,6 +237,113 @@ export function JobsFeed() {
           <SlidersHorizontal size={16} />
           Filters & searches
         </button>
+        <button className="button" onClick={() => setAdvanced(true)}>
+          <Bookmark size={16} /> Save search
+        </button>
+        <button
+          className="text-button"
+          onClick={() => {
+            setSearchId('');
+            setSearchName('');
+            setFilters(filtersSchema.parse({ view: filters.view }));
+            setUpdates(false);
+          }}
+        >
+          Clear filters
+        </button>
+      </div>
+      <div className={styles.quickFilters}>
+        <label>
+          Country
+          <select
+            value={
+              filters.countries.length === 1
+                ? filters.countries[0]
+                : filters.countries.length
+                  ? 'custom'
+                  : ''
+            }
+            onChange={(e) =>
+              patch({ countries: e.target.value ? [e.target.value] : [] })
+            }
+          >
+            <option value="">All countries</option>
+            {filters.countries.length > 1 && (
+              <option value="custom" disabled>
+                Multiple countries
+              </option>
+            )}
+            {filters.countries.length === 1 &&
+              !['Canada', 'United States'].includes(filters.countries[0]) && (
+                <option value={filters.countries[0]}>
+                  {filters.countries[0]}
+                </option>
+              )}
+            <option value="Canada">Canada</option>
+            <option value="United States">United States</option>
+          </select>
+        </label>
+        <label>
+          Engineering area
+          <select
+            value={
+              filters.disciplines.length === 1
+                ? filters.disciplines[0]
+                : filters.disciplines.length
+                  ? 'custom'
+                  : ''
+            }
+            onChange={(e) =>
+              patch({
+                disciplines: e.target.value
+                  ? [e.target.value as Filters['disciplines'][number]]
+                  : [],
+              })
+            }
+          >
+            <option value="">All areas</option>
+            {filters.disciplines.length > 1 && (
+              <option value="custom" disabled>
+                Multiple areas
+              </option>
+            )}
+            {disciplineSchema.options.map((d) => (
+              <option key={d} value={d}>
+                {disciplineLabels[d]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Work arrangement
+          <select
+            value={
+              filters.arrangements.length === 1
+                ? filters.arrangements[0]
+                : filters.arrangements.length
+                  ? 'custom'
+                  : ''
+            }
+            onChange={(e) =>
+              patch({
+                arrangements: e.target.value
+                  ? [e.target.value as Filters['arrangements'][number]]
+                  : [],
+              })
+            }
+          >
+            <option value="">All arrangements</option>
+            {filters.arrangements.length > 1 && (
+              <option value="custom" disabled>
+                Multiple arrangements
+              </option>
+            )}
+            <option value="on-site">On-site</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="remote">Remote</option>
+            <option value="unknown">Not stated</option>
+          </select>
+        </label>
       </div>
       <div className="desk-tabs">
         {[
@@ -232,7 +353,14 @@ export function JobsFeed() {
         ].map(([label, p]) => (
           <button
             key={String(label)}
-            className="button"
+            className={`button ${(!filters.saved && !filters.newOnly && label === 'All jobs') || (filters.saved && label === 'Saved') || (filters.newOnly && label === 'New since last visit') ? 'button-primary' : ''}`}
+            aria-pressed={
+              label === 'Saved'
+                ? filters.saved
+                : label === 'New since last visit'
+                  ? filters.newOnly
+                  : !filters.saved && !filters.newOnly
+            }
             onClick={() =>
               patch({
                 saved: false,
@@ -593,6 +721,24 @@ export function JobsFeed() {
           {loading ? 'Loading opportunities…' : `${total} opportunities`}
         </p>
         <span>Newest first · posted, otherwise discovered</span>
+        <div className={styles.layoutControls} aria-label="Results layout">
+          <button
+            className="icon-button"
+            aria-label="List layout"
+            aria-pressed={layout === 'list'}
+            onClick={() => setLayout('list')}
+          >
+            <List size={18} />
+          </button>
+          <button
+            className="icon-button"
+            aria-label="Grid layout"
+            aria-pressed={layout === 'grid'}
+            onClick={() => setLayout('grid')}
+          >
+            <LayoutGrid size={18} />
+          </button>
+        </div>
       </div>
       {error && (
         <div role="alert" className="desk-alert">
@@ -600,7 +746,10 @@ export function JobsFeed() {
         </div>
       )}
       <Sheet open={open} onOpenChange={setOpen}>
-        <div className="jobs-grid">
+        <div
+          className={`jobs-grid ${layout === 'list' ? styles.list : ''}`}
+          aria-busy={loading}
+        >
           {jobs.map((job) => (
             <JobCard
               key={job.id}
@@ -674,6 +823,6 @@ export function JobsFeed() {
           {loadingMore ? 'Loading…' : 'Load more'}
         </button>
       )}
-    </>
+    </section>
   );
 }

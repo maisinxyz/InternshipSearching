@@ -1,3 +1,72 @@
+# Feed coverage and local background collection — 2026-10-20
+
+- User clarified that finding more internships and keeping listings fresh is the
+  priority. Added seven verified public employer presets: Apera AI, Later,
+  Cohere, Super.com, Harvey, Geotab and Samsara. Setup retained all seven existing
+  sources, names, settings and history. The local workspace now has 14 sources.
+- Collected and verified 118 retained job records, with 113 visible technical
+  roles and 18 Metro Vancouver matches (previous recorded baseline: 94 retained,
+  91 visible, 13 Vancouver). These are current inventory/discovery counts, not
+  claims that the employers published those roles today. Geotab and Super.com
+  currently have no matching technical/student listings; monitoring is active.
+- Activated `npm run feed:watch` against the local production server on port 3001. It dispatches authenticated due work every minute with the browser closed.
+  Source intervals remain 5/15/60 minutes; leases/backoff/batches persist in SQLite.
+  Observed multiple scheduler runs and recovery of the initial failed sources;
+  final heartbeat healthy, all 14 source checks complete, no pending cursor/errors.
+- Added local worker repository selection only under existing local opt-in;
+  hosted mode retains credential requirements and bearer checks. Random local
+  scheduler secret remains in ignored `.env.local`. No hosted deployment, remote
+  migration, login service or outward notification was activated.
+- Fixed nullable Ashby workplace values, dotted board identifiers, and bounded
+  large public ATS responses (8 MB on exact API hosts, 3 MB for general imports).
+  Preserved DNS pinning, private-network rejection, redirects and timeouts.
+- Corrected the shared technical filter for spelled-out Machine Learning and
+  Account Development sales titles. Adapter v4 forces a full recheck for prior
+  ETags while preserving dates and user state; versions 1–3 remain readable.
+  Reversibly hid only the two newly introduced Samsara sales roles. Refreshed
+  Apera, Cohere and Samsara successfully with the corrected rules.
+- Fixed local same-origin checks when Next normalizes an incoming loopback host;
+  actual host/port must still match the origin. Missing, foreign and mismatched
+  origins remain rejected; hosted validation is unchanged.
+- Checks: final production build (including TypeScript), browsing/connector,
+  direct-feed, local-access and account-source tests passed. Live pinned fetches
+  passed for all 14 endpoints. Verified Jobs and APIs return 200, geographic feed
+  counts, successful mutations from the 127.0.0.1 origin, retained hidden records,
+  scheduler heartbeat and unauthorized scheduler GET/POST returning 401. Changed
+  files formatted; `git diff --check` passed. Production server and worker left
+  running on port 3001. Port 3000 belongs to another project and was untouched.
+- Limits/checks omitted: no browser is available to automation, so visual,
+  phone and keyboard acceptance remain unverified. No overnight/weekend pilot or
+  publication-to-discovery latency measurement. The Mac, server and worker must
+  stay running; sleep/shutdown stops collection. Automatic closed-role removal,
+  universal employer coverage and hosted unattended operation remain pending.
+
+# Internship board browsing checkpoint — 2026-10-20
+
+- User requested continuing the app and recreating Intern Insider. Implemented
+  the first browsing checkpoint using its public preview as a reference: compact
+  list cards, list/grid controls, quick country/engineering/arrangement filters,
+  visible save-search and clear-filter actions, and selected Saved/New controls.
+- Reused existing canonical filters, saved searches, cards and detail Sheet.
+  Multiple selections from advanced/saved searches remain visible in quick
+  controls. Clear filters retains the chosen geographic view.
+- Kept local persisted jobs, original dates/source wording, explicit unknowns,
+  existing source integrations and application state. No new data collection,
+  deployment, subscription access or AI capability was added. Original CSS is
+  scoped to the live job board; synthetic preview presentation is unchanged.
+- Recorded the public visual reference in `ui-components.md`; no third-party
+  code or assets were adopted.
+- Checks: direct TypeScript check and production build passed; browsing and
+  direct-feed regression suites passed; changed TSX/CSS formatted;
+  `git diff --check` passed. Build/startup initially paused without diagnostics
+  and then completed (production compilation and dev startup about 3 minutes).
+- Limits: Browser automation has no available browser in this session, so
+  desktop/phone/keyboard visual acceptance is outstanding. This is a first
+  browsing checkpoint, not feature or inventory parity with Intern Insider.
+- Local startup diagnosis found port 3000 belongs to a different project
+  (`vince-portfolio-preview-deps`, Next 15). Co-op Desk is running on port 3001;
+  the other project was left running.
+
 # Live local feed populated — 2026-10-18 (Vancouver time)
 
 - Added all seven employer/community presets to the shared local workspace and
